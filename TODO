@@ -1,0 +1,8 @@
+- Test read/write to file so that correct # of bytes is read/written
+- Test each command:
+    import
+    list
+    cat
+    overwrite
+    display
+    exit

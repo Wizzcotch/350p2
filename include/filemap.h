@@ -4,6 +4,7 @@
 #include <fstream>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class Filemap
 {
@@ -16,7 +17,10 @@ class Filemap
         Filemap(std::string filename);
         ~Filemap();
         void addFile(std::string filename, int inode);
+        void removeFile(std::string filename);
         int getinodeNumber(std::string filename);
+        std::unordered_map<std::string, int> getFilemap() { return filemap; }
+        std::vector<std::pair<std::string, int> > populate();
 
 
 };

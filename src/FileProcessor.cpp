@@ -11,6 +11,7 @@ FileProcessor::FileProcessor(const char *inputIn)
 {
     std::ifstream input(inputIn, std::ifstream::ate | std::ifstream::binary);
     filesize = input.tellg();
+    position = filesize;
     input.seekg(0, input.beg);
     if (!input)
     {
@@ -27,24 +28,24 @@ std::string FileProcessor::readLine()
     return "";
 }
 
-bool FileProcessor::isDone() { return filesize == 0; }
+bool FileProcessor::isDone() { return position == 0; }
 
 // Read into byte array
 char* FileProcessor::readBytes()
 {
     //std::string dataBlock;
     char *memory;
-    if (filesize - 1024 >= 0)
+    if (position - 1024 >= 0)
     {
-        filesize -= 1024;
+        position -= 1024;
         memory = new char[1024];
         input.read(memory, 1024);
     }
     else
     {
-        filesize = 0;
-        memory = new char[filesize];
-        input.read(memory, filesize);
+        position = 0;
+        memory = new char[position];
+        input.read(memory, position);
     }
 
     return memory;

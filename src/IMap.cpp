@@ -56,12 +56,14 @@ char* IMap::convertToString()
     int mask = 0xFF;
     for(int iter = 0, index = 0; iter < numInodes; ++iter, ++index)
     {
-        int inode = iter + (mapPieceNumber) * 1024;
-        if(blockNumbers[inode] != -1)
+        //int inode = iter + (mapPieceNumber) * 1024;
+        if(blockNumbers[index] != -1)
         {
             for(int i = 3; i >= 0; --i)
             {
-                imapData += (char)((blockNumbers[inode] >> 8*i) & mask);
+                char dummy;
+                dummy = (char)((blockNumbers[index] >> 8*i) & mask);
+                imapData += dummy;
             }
         }
         else
@@ -74,4 +76,14 @@ char* IMap::convertToString()
 
 }
 
+void IMap::clear()
+{
+    mapPieceNumber++;
+    nextAvailinode = 0;
+    numInodes = 0;
+    for(auto &b : blockNumbers)
+    {
+        b = -1;
+    }
+}
 

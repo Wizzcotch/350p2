@@ -11,6 +11,7 @@ class ChkptRegion
         std::array<int, 40> imap;
         std::array<bool, 32> segInfo;
         int nextimapPiece;
+        int nextFreeSeg;
 
     public:
         ChkptRegion() = delete;
@@ -18,6 +19,9 @@ class ChkptRegion
         ~ChkptRegion();
         void addimap(int blkNumber);
         int getimap(int imapPiece);
+        int getNextFreeSeg();
+        void markSegment(int segment, bool state);
+        std::array<int, 40> getimapArray() { return imap; }
 };
 
 #endif

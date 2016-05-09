@@ -38,6 +38,7 @@ Filemap::~Filemap()
     {
         for(auto iter = filemap.begin(); iter != filemap.end(); ++iter)
         {
+            //std::cerr << iter->first << ": " << iter->second << std::endl;
             ofs << iter->first << " " << std::to_string(iter->second) << std::endl;
         }
         ofs.close();
@@ -50,10 +51,27 @@ Filemap::~Filemap()
 }
 void Filemap::addFile(std::string filename, int inode)
 {
+    //std::cerr << filename << ": " << inode << std::endl;
     filemap[filename] = inode;
+}
+
+void Filemap::removeFile(std::string filename)
+{
+    //std::cerr << filename << ": " << inode << std::endl;
+    filemap.erase(filename);
 }
 
 int Filemap::getinodeNumber(std::string filename)
 {
     return filemap[filename];
+}
+
+std::vector<std::pair<std::string, int> > Filemap::populate()
+{
+    std::vector<std::pair<std::string, int> > list;
+    for (auto file : filemap)
+    {
+        list.push_back(std::make_pair(file.first, 0));
+    }
+    return list;
 }

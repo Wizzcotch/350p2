@@ -11,7 +11,7 @@ class FileProcessor
 {
     public:
         std::ifstream input;
-        int filesize;
+        int filesize, position;
         ~FileProcessor();
         FileProcessor(const char *inputIn);
         std::string readLine();

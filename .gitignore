@@ -29,3 +29,6 @@
 
 # DRIVE
 DRIVE/*
+
+# Build files
+build/*

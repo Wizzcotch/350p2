@@ -1,9 +1,11 @@
 ## CS350 Operating Systems
 
 Spring 2016
+
 LAB 7 README FILE
 
 Author(s): Miguel Lumapat, Denis Plotkin, Alan Plotko
+
 Team Name: Team M.A.D.
 
 ### PURPOSE:

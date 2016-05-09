@@ -1,15 +1,16 @@
-CS350 Operating Systems
+## CS350 Operating Systems
+
 Spring 2016
 LAB 7 README FILE
 
 Author(s): Miguel Lumapat, Denis Plotkin, Alan Plotko
 Team Name: Team M.A.D.
 
-PURPOSE:
+### PURPOSE:
 
 Lab 7 begins the part of Program 2 to simulate LFS.
 
-FILES:
+### FILES:
 
 Included with this project are 13 files:
 
@@ -27,10 +28,10 @@ Included with this project are 13 files:
 12) filemap.cpp, the file to store the associations, as per the instructions to not work with directories and indirect pointers
 13) filemap.h, the header file for creating the filemap
 
-TO COMPILE:
+### TO COMPILE:
 
 Just extract the files and then run the following command: make
 
-GENERATING DRIVE FILES:
+### GENERATING DRIVE FILES:
 
 The makefile will generate the DRIVE folder, 1MB SEGMENT files, 192 byte CHECKPOINT_REGION file, and empty FILEMAP, since we are instructed to not worry about directories and indirect pointers, and just work with complex filenames in that file.

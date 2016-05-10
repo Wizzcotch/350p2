@@ -27,7 +27,7 @@ generateDrive:
 	@n=$(COUNT); \
 	while [ $${n} -lt 33 ] ; do \
 		if [ ! -f $(DRIVE_DIRNAME)/$(SEGMENT_PREFIX)$$n ]; then \
-			truncate -s 1024 $(DRIVE_DIRNAME)/$(SEGMENT_PREFIX)$$n ; \
+			truncate -s 1M $(DRIVE_DIRNAME)/$(SEGMENT_PREFIX)$$n ; \
 		fi ; \
 		n=`expr $$n + 1`; \
 	done

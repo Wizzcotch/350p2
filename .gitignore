@@ -32,3 +32,6 @@ DRIVE/*
 
 # Build files
 build/*
+
+# Misc
+program2 # Executable

@@ -17,6 +17,7 @@
 #define BLK_SIZE 1024
 #define MAX_FILE_NUM 10000
 #define MAX_INODE_DPNTR 128 //Maximum number of data block pointers in an inode
+#define SEGMENT_SIZE BLK_SIZE * BLK_SIZE
 
 #ifndef DEBUG
 #define DEBUG 1
@@ -24,8 +25,8 @@
 
 // Buffer
 char* logBuffer = new char[BLK_SIZE * BLK_SIZE];
-char* overflowBuffer = new char[130]; // 128 data blocks + 1 inode + 1 imap
-int logBufferPos;
+char* overflowBuffer = new char[130 * BLK_SIZE]; // 128 data blocks + 1 inode + 1 imap
+int logBufferPos, overBufPos;
 int currentSegment;
 IMap currentIMap(0);
 bool bufferFull;
@@ -137,6 +138,12 @@ void import_file(std::string& originalName, std::string& lfsName)
     /* Did not handle case of overwrite */
     for (int bufferPos = 0; bufferPos < size; bufferPos += BLK_SIZE)
     {
+        if(logBufferPos == SEGMENT_SIZE)
+        {
+            bufferFull = true;
+            /* Did not check if currentSegment exceeds 32 */
+            inodeObj.addDataPointer((BLK_SIZE * (currentSegment + 1)));
+        }
         // Absolute position in memory
         inodeObj.addDataPointer((BLK_SIZE * currentSegment) + logBufferPos);
 
@@ -149,11 +156,18 @@ void import_file(std::string& originalName, std::string& lfsName)
     }
 
     /* Write inode into buffer */
+    char* inodeStr = inodeObj.convertToString();
     strncpy(&logBuffer[logBufferPos],
-            inodeObj.convertToString(),
+            inodeStr,
             sizeof(INodeInfo));
 
-    if (DEBUG) std::cerr << "[DEBUG] Created INode" << std::endl;
+    if (DEBUG)
+    {
+        std::cerr << "[DEBUG] Created INode" << std::endl;
+        std::cerr << "Contents: " << inodeStr << std::endl;
+    }
+
+    delete inodeStr;
 
     // Add inode to imap
     int createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);
@@ -232,6 +246,7 @@ int main(int argc, char *argv[])
     ifs.close();
 
     logBufferPos = 8 * BLK_SIZE;
+    overBufPos = 0;
 
     // Exit with an error message if argument count is incorrect (i.e. expecting one: input file path)
     if (argc != 1)

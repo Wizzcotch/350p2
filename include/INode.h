@@ -16,11 +16,11 @@ typedef struct {
 class INode
 {
     public:
-        INodeInfo info;
         ~INode();
-        INode(std::string filenameIn);
-        void setSize(int size) {info.filesize = size;}
-        void addDataPointer(int blockNum);
+        INodeInfo info;
+        INode(const std::string filenameIn);
+        void setSize(const int size) {info.filesize = size;}
+        void addDataPointer(const int blockNum);
         char* convertToString();
 
     private:

@@ -133,9 +133,10 @@ void import_file(std::string& originalName, std::string& lfsName)
 
     // Setup inode
     INode inodeObj(lfsName);
-    if(size / BLK_SIZE + 1 > 128)
+    if(size / BLK_SIZE > 128 || (size / BLK_SIZE == 128 && size % BLK_SIZE > 0))
     {
         std::cerr << "[ERROR] File '" << originalName << "' too big." << std::endl;
+        //std::cerr << "Filesize: " << size / BLK_SIZE << std::endl;
         return;
     }
 
@@ -143,18 +144,7 @@ void import_file(std::string& originalName, std::string& lfsName)
 
     for (int bufferPos = 0; bufferPos < size; bufferPos += BLK_SIZE)
     {
-        if(logBufferPos == SEGMENT_SIZE)
-        {
-            bufferFull = true;
-            /* Did not check if currentSegment exceeds 32 */
-            inodeObj.addDataPointer((BLK_SIZE * (currentSegment + 1)) + overBufPos + 8);
-            for (int offset = 0; offset < BLK_SIZE && overBufPos + bufferPos + offset < size; offset++)
-            {
-                overflowBuffer[overBufPos + offset] = buffer[bufferPos + offset];
-            }
-            overBufPos += BLK_SIZE;
-        }
-        else
+        if(logBufferPos < SEGMENT_SIZE)
         {
             // Absolute position in memory
             inodeObj.addDataPointer((BLK_SIZE * currentSegment) + logBufferPos);
@@ -166,15 +156,35 @@ void import_file(std::string& originalName, std::string& lfsName)
 
             logBufferPos += BLK_SIZE;
         }
+        else
+        {
+            if(!bufferFull) bufferFull = true;
+            /* Did not check if currentSegment exceeds 32 */
+            inodeObj.addDataPointer((BLK_SIZE * (currentSegment + 1)) + overBufPos + 8*BLK_SIZE);
+            for (int offset = 0; offset < BLK_SIZE && overBufPos + bufferPos + offset < size; offset++)
+            {
+                overflowBuffer[overBufPos + offset] = buffer[bufferPos + offset];
+            }
+            overBufPos += BLK_SIZE;
+        }
     }
 
     /* Write inode into buffer */
     char* inodeStr = inodeObj.convertToString();
-    if(!bufferFull) memcpy(&logBuffer[logBufferPos], inodeStr, sizeof(INodeInfo));
+
+    /* Record inode in imap */
+    int createdInodeNum;
+    if(!bufferFull)
+    {
+        memcpy(&logBuffer[logBufferPos], inodeStr, sizeof(INodeInfo));
+        logBufferPos += BLK_SIZE;
+        createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);
+    }
     else
     {
         memcpy(&overflowBuffer[overBufPos], inodeStr, sizeof(INodeInfo));
         overBufPos += BLK_SIZE;
+        createdInodeNum = currentIMap.addinode((BLK_SIZE * (currentSegment + 1)) + overBufPos + 8*BLK_SIZE);
     }
 
     if (DEBUG)
@@ -186,11 +196,6 @@ void import_file(std::string& originalName, std::string& lfsName)
 
     delete inodeStr;
 
-    // Add inode to imap
-    int createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);
-
-    // Increment buffer position
-    if(!bufferFull) logBufferPos += BLK_SIZE;
 
     // Add file-inode association to filemap
     filemap.addFile(lfsName, createdInodeNum);
@@ -241,7 +246,6 @@ void remove_file(std::string& filename)
             //}
         //}
     //}
-
 }
 
 int main(int argc, char *argv[])
@@ -262,7 +266,8 @@ int main(int argc, char *argv[])
     ifs.read(logBuffer, BLK_SIZE * BLK_SIZE);
     ifs.close();
 
-    logBufferPos = 8 * BLK_SIZE;
+    // Initialize buffers' positions
+    logBufferPos = 8 * BLK_SIZE; // Start buffer after segment summary blocks
     overBufPos = 0;
 
     // Exit with an error message if argument count is incorrect (i.e. expecting one: input file path)
@@ -324,11 +329,10 @@ int main(int argc, char *argv[])
                         currentIMap.clear();
                         chkptregion.addimap((BLK_SIZE * (currentSegment+1)) +
                                 overBufPos + 8);
+                        if(DEBUG) std::cerr << "[DEBUG] imap is full, writing to buffer" << std::endl;
                     }
 
                     std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment+1);
-                    // Update segment
-                    chkptregion.markSegment(currentSegment, true);
 
                     if (DEBUG) std::cerr << "Segment file: " << segmentFile << std::endl;
                     std::ofstream ofs(segmentFile);
@@ -340,22 +344,50 @@ int main(int argc, char *argv[])
                     ofs.write(logBuffer, BLK_SIZE * BLK_SIZE);
                     ofs.close();
 
+                    if(DEBUG)
+                    {
+                        std::cerr << "[DEBUG] Buffer is full, writing to segment" << std::endl;
+                        std::cerr << "[DEBUG] overBufPos: " << overBufPos << std::endl;
+                    }
+
                     //Put overflowBuffer in logBuffer
-                    memcpy(&logBuffer[8 * BLK_SIZE],
-                            overflowBuffer,
-                            BLK_SIZE * overBufPos);
-                    overBufPos = 0;
-                    logBufferPos = 0;
+                    if(overBufPos > 0)
+                    {
+                        memcpy(&logBuffer[8 * BLK_SIZE],
+                                overflowBuffer,
+                                overBufPos);
+                        logBufferPos = 8 * BLK_SIZE + overBufPos;
+                        overBufPos = 0;
+                        if(DEBUG) std::cerr << "[DEBUG] Overflow buffer successfully written" << std::endl;
+                    }
+                    else
+                    {
+                        logBufferPos = 0;
+                    }
+
+                    // Update segment
+                    chkptregion.markSegment(currentSegment, true);
+                    currentSegment = chkptregion.getNextFreeSeg();
+
+                    // Reset
+                    bufferFull = false;
                 }
+
                 if(currentIMap.isFull())
                 {
+                    // Copy imap piece into buffer
                     char* imapStr = currentIMap.convertToString();
                     memcpy(&logBuffer[logBufferPos],
                             imapStr,
                             sizeof(int) * 256);
-                    delete imapStr;
+
+                    // Ready imap object for next imap
                     currentIMap.clear();
                     chkptregion.addimap((BLK_SIZE * currentSegment) + logBufferPos);
+
+                    delete imapStr;
+
+                    if(DEBUG) std::cerr << "[DEBUG] imap is full, writing to buffer" << std::endl;
                 }
 
             }

@@ -134,17 +134,8 @@ void import_file(std::string& originalName, std::string& lfsName)
     /* Did not handle case of overwrite */
     for (int bufferPos = 0; bufferPos < size; bufferPos += BLK_SIZE)
     {
-<<<<<<< HEAD
-        if (inodeObj.dataPointers.size() < 128)
-        {
-            // Absolute position in memory
-            inodeObj.dataPointers.push_back((BLK_SIZE * currentSegment) + logBufferPos);
-            if (DEBUG) std::cerr << (BLK_SIZE * currentSegment) + logBufferPos << std::endl;
-        }
-=======
         // Absolute position in memory
         inodeObj.addDataPointer((BLK_SIZE * currentSegment) + logBufferPos);
->>>>>>> master
 
         for (int offset = 0; offset < BLK_SIZE; offset++)
         {

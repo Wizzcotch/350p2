@@ -44,6 +44,15 @@ void proper_exit()
 {
     // Update segment
     chkptregion.markSegment(currentSegment, true);
+    chkptregion.addimap((BLK_SIZE * currentSegment) + logBufferPos);
+
+    // Write imap to segment
+    char* imapStr = currentIMap.convertToString();
+    int strSize = strlen(imapStr);
+    for (int i = 0; i < strSize; i++)
+    {
+        logBuffer[logBufferPos++] = imapStr[i];
+    }
 
     // Write buffer into the segment file
     std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment + 1);
@@ -54,6 +63,7 @@ void proper_exit()
         std::cerr << "[ERROR] Could not open SEGMENT file for reading" << std::endl;
         exit(1);
     }
+
     ofs.write(logBuffer, BLK_SIZE * BLK_SIZE);
     ofs.close();
 
@@ -144,31 +154,25 @@ void import_file(std::string& originalName, std::string& lfsName)
             logBuffer[logBufferPos++] = buffer[bufferPos + offset];
         }
 
-        logBufferPos += BLK_SIZE;
+        // Jump to next block
+        logBufferPos = ((logBufferPos / BLK_SIZE) + 1) * BLK_SIZE;
     }
-
-    /* Write inode into buffer */
-    strncpy(&logBuffer[logBufferPos],
-            inodeObj.convertToString(),
-            sizeof(INodeInfo));
-
-    if (DEBUG) std::cerr << "[DEBUG] Created INode" << std::endl;
 
     // Write inode to segment
     char* inodeStr = inodeObj.convertToString();
-    int iSize = strlen(inodeStr);
+    int iSize = (32 * sizeof(char)) + (129 * sizeof(int));
     for (int i = 0; i < iSize; i++)
     {
         logBuffer[logBufferPos++] = inodeStr[i];
     }
 
+    // Increment buffer position
+    logBufferPos = ((logBufferPos / BLK_SIZE) + 1) * BLK_SIZE;
+
     if (DEBUG) std::cerr << "[DEBUG] Wrote INode to buffer" << std::endl;
 
     // Add inode to imap
     int createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);
-
-    // Increment buffer position
-    logBufferPos += BLK_SIZE;
 
     // Add file-inode association to filemap
     filemap.addFile(lfsName, createdInodeNum);

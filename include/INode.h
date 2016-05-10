@@ -8,9 +8,9 @@
 #include <cstring>
 
 typedef struct {
-    char filename[32];
-    int filesize;
-    int dataPointers[128];
+    char filename[32] = {0};
+    int filesize = 0;
+    int dataPointers[128] = {-1};
 } INodeInfo;
 
 class INode

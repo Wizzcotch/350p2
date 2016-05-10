@@ -22,6 +22,7 @@ class INode
         void setSize(const int size) {info.filesize = size;}
         void addDataPointer(const int blockNum);
         char* convertToString();
+        void printValues();
 
     private:
         int nextDataPointer;

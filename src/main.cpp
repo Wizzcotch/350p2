@@ -24,7 +24,7 @@
 
 // Buffer
 char* logBuffer = new char[BLK_SIZE * BLK_SIZE];
-char* overflowBuffer = new char[130]; // 128 data blocks + 1 inode + 1 imap
+char* overflowBuffer = new char[MAX_INODE_DPNTR + 2]; // 128 data blocks + 1 inode + 1 imap
 int logBufferPos;
 int currentSegment;
 IMap currentIMap(0);
@@ -42,11 +42,6 @@ ChkptRegion chkptregion("./DRIVE/CHECKPOINT_REGION");
  */
 void proper_exit()
 {
-    //logBuffer.at(logBufferPos) = currentIMap.convertToString();
-    //chkptregion.addimap(logBufferPos + (currentSegment * BLK_SIZE));
-
-    //if (DEBUG) std::cerr << "Current imap: " << std::string(logBuffer.at(logBufferPos - 1)) << std::endl;
-
     // Update segment
     chkptregion.markSegment(currentSegment, true);
 
@@ -54,6 +49,14 @@ void proper_exit()
     std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment + 1);
     if (DEBUG) std::cerr << "Segment file: " << segmentFile << std::endl;
     
+    // Write imap to segment
+    char* imapStr = currentIMap.convertToString();
+    int iSize = strlen(imapStr);
+    for (int i = 0; i < iSize; i++)
+    {
+        logBuffer[logBufferPos++] = imapStr[i];
+    }
+
     std::ofstream ofs(segmentFile);
     if(!ofs.is_open())
     {
@@ -89,10 +92,11 @@ void list_files()
             if (*mapIt != -1)
             {
                 int idx = ((int)(*mapIt / 1024.0)) + 1;
+                std::cerr << "Index: " << idx << std::endl;
                 std::ifstream in("./DRIVE/SEGMENT" + std::to_string(idx));
                 std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-                // const char *tmpBuffer = contents.c_str();
-                // char ptr = tmpBuffer[inodeNum];
+                /*const char *tmpBuffer = contents.c_str();
+                char ptr = tmpBuffer[inodeNum];*/
             }
         }
         std::cout << currName << "\t" << inodeNum << std::endl;
@@ -131,6 +135,7 @@ void import_file(std::string& originalName, std::string& lfsName)
         {
             // Absolute position in memory
             inodeObj.dataPointers.push_back((BLK_SIZE * currentSegment) + logBufferPos);
+            if (DEBUG) std::cerr << (BLK_SIZE * currentSegment) + logBufferPos << std::endl;
         }
 
         for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
@@ -140,6 +145,16 @@ void import_file(std::string& originalName, std::string& lfsName)
     }
     
     if (DEBUG) std::cerr << "[DEBUG] Created INode" << std::endl;
+
+    // Write inode to segment
+    char* inodeStr = inodeObj.convertToString();
+    int iSize = strlen(inodeStr);
+    for (int i = 0; i < iSize; i++)
+    {
+        logBuffer[logBufferPos++] = inodeStr[i];
+    }
+
+    if (DEBUG) std::cerr << "[DEBUG] Wrote INode to buffer" << std::endl;
 
     // Add inode to imap
     int createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);

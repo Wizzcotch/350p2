@@ -28,11 +28,11 @@
 *.app
 
 # DRIVE
-DRIVE/*
+DRIVE/
 
 # Build files
-build/*
+build/
 
 # Misc
 program2 # Executable
-lorem.txt # Ignore test .txt files
+*.txt # Ignore test .txt files

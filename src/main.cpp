@@ -4,11 +4,11 @@
 #include <sstream>
 #include <stdio.h>
 #include <string>
+#include <cstring>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 #include <vector>
-#include "FileProcessor.h"
 #include "Filemap.h"
 #include "ChkptRegion.h"
 #include "IMap.h"
@@ -53,7 +53,6 @@ void proper_exit()
     // Write buffer into the segment file
     std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment + 1);
     if (DEBUG) std::cerr << "Segment file: " << segmentFile << std::endl;
-    
     std::ofstream ofs(segmentFile);
     if(!ofs.is_open())
     {
@@ -111,38 +110,56 @@ void import_file(std::string& originalName, std::string& lfsName)
         std::cerr << "[ERROR] Could not open file for reading" << std::endl;
         exit(1);
     }
+    else if(lfsName.size() > 32)
+    {
+        std::cerr << "[ERROR] File name '" << lfsName << "' too long" << std::endl;
+    }
 
     // Get file size
     ifs.seekg(0, ifs.end);
     long size = ifs.tellg();
     ifs.seekg(0);
 
-    // Allocate memory for file contents
+    //// Allocate memory for file contents
     char* buffer = new char[size];
     ifs.read(buffer, size);
 
     // Setup inode
     INode inodeObj(lfsName);
+    if(size / BLK_SIZE + 1 > 128)
+    {
+        std::cerr << "[ERROR] File '" << originalName << "' too big." << std::endl;
+        return;
+    }
+
     inodeObj.setSize(size);
 
+    /* Did not handle case of overwrite */
     for (int bufferPos = 0; bufferPos < size; bufferPos += BLK_SIZE)
     {
-        if (inodeObj.dataPointers.size() < 128)
-        {
-            // Absolute position in memory
-            inodeObj.dataPointers.push_back((BLK_SIZE * currentSegment) + logBufferPos);
-        }
+        // Absolute position in memory
+        inodeObj.addDataPointer((BLK_SIZE * currentSegment) + logBufferPos);
 
         for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
         {
             logBuffer[logBufferPos + offset] = buffer[bufferPos + offset];
         }
+
+        logBufferPos += BLK_SIZE;
     }
-    
+
+    /* Write inode into buffer */
+    strncpy(&logBuffer[logBufferPos],
+            inodeObj.convertToString(),
+            sizeof(INodeInfo));
+
     if (DEBUG) std::cerr << "[DEBUG] Created INode" << std::endl;
 
     // Add inode to imap
     int createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);
+
+    // Increment buffer position
+    logBufferPos += BLK_SIZE;
 
     // Add file-inode association to filemap
     filemap.addFile(lfsName, createdInodeNum);

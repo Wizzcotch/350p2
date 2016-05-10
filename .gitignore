@@ -34,5 +34,5 @@ DRIVE/
 build/
 
 # Misc
-program2 # Executable
-*.txt # Ignore test .txt files
+program2
+*.txt

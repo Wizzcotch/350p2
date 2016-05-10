@@ -6,15 +6,17 @@ INode::~INode() {}
 // Constructor
 INode::INode(std::string filenameIn) : nextDataPointer(0)
 {
-    //for(int i = 0; i < 32; ++i )
-    //{
-        //info.filename[i] = '\n';
-    //}
+    for(int i = 0; i < 32; ++i )
+    {
+        info.filename[i] = (char)-1;
+    }
 
     if(filenameIn.copy(info.filename, filenameIn.size()) <= 0)
     {
         std::cerr << "[ERROR]" << std::endl;
     }
+    //info.filename[31] = '9';
+    //info.filename[23] = 'B';
 
     info.filesize = -1;
     for(int i = 0; i < 128; ++i)
@@ -34,9 +36,16 @@ char* INode::convertToString()
 {
     char* retChar = new char[sizeof(INodeInfo)];
     memcpy(retChar, &info, sizeof(INodeInfo));
-    std::cout << "INode buffer: " << retChar << std::endl;
-    std::cout << "INode filesize: " << info.filesize << std::endl;
-    std::cout << "sizeof INode buffer: " << sizeof(INodeInfo) << std::endl;
-    std::cout << "Num of data pointers: " << nextDataPointer << std::endl;
     return retChar;
+}
+
+void INode::printValues()
+{
+    std::cerr << "[DEBUG] INode filename: " << info.filename << std::endl;
+    std::cerr << "[DEBUG] INode filesize: " << info.filesize << std::endl;
+    for(int i = 0; i < nextDataPointer; ++i)
+    {
+        std::cerr << info.dataPointers[i] << " ";
+    }
+    std::cerr << "\n" << "[DEBUG] Number of data pointers: " << nextDataPointer << std::endl;
 }

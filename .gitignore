@@ -34,4 +34,6 @@ DRIVE/*
 build/*
 
 # Misc
-program2 # Executable
+program2
+*.txt
+*.swp

@@ -21,7 +21,7 @@ void IMap::calcNextinode()
     }
     else
     {
-        for(int iter = nextAvailinode+1; iter < 1024; ++iter)
+        for(int iter = 0; iter < 256; ++iter)
         {
             if(blockNumbers[iter] == -1)
             {
@@ -52,27 +52,29 @@ void IMap::removeinode(int inode)
 }
 char* IMap::convertToString()
 {
-    std::string imapData;
-    int mask = 0xFF;
-    for(int iter = 0, index = 0; iter < numInodes; ++iter, ++index)
-    {
-        //int inode = iter + (mapPieceNumber) * 1024;
-        if(blockNumbers[index] != -1)
-        {
-            for(int i = 3; i >= 0; --i)
-            {
-                char dummy;
-                dummy = (char)((blockNumbers[index] >> 8*i) & mask);
-                imapData += dummy;
-            }
-        }
-        else
-        {
-            --iter;
-        }
-    }
+    /*std::string imapData;*/
+    //int mask = 0xFF;
+    //for(int iter = 0, index = 0; iter < numInodes; ++iter, ++index)
+    //{
+        ////int inode = iter + (mapPieceNumber) * 1024;
+        //if(blockNumbers[index] != -1)
+        //{
+            //for(int i = 3; i >= 0; --i)
+            //{
+                //char dummy;
+                //dummy = (char)((blockNumbers[index] >> 8*i) & mask);
+                //imapData += dummy;
+            //}
+        //}
+        //else
+        //{
+            //--iter;
+        //}
+    /*}*/
 
-    return strdup(imapData.c_str());
+    char* retChar = new char[sizeof(int) * 256];
+    memcpy(retChar, blockNumbers, sizeof(int) * 256);
+    return retChar;
 
 }
 

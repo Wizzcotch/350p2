@@ -35,4 +35,4 @@ build/*
 
 # Misc
 program2 # Executable
-*.txt # Ignore test .txt files
+lorem.txt # Ignore test .txt files

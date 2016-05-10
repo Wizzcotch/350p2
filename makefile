@@ -2,7 +2,7 @@
 CC = g++
 SRCDIR = src
 BUILDDIR = build
-TARGET = lab7
+TARGET = program2
  
 SRCEXT := cpp
 SOURCES := $(wildcard $(SRCDIR)/*.$(SRCEXT)) #$(shell find $(SRCDIR) -type f -name *.$(SRCEXT))

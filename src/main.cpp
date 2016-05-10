@@ -9,8 +9,8 @@
 #include <unistd.h>
 #include <vector>
 #include "FileProcessor.h"
-#include "filemap.h"
-#include "chkptregion.h"
+#include "Filemap.h"
+#include "ChkptRegion.h"
 #include "IMap.h"
 #include "INode.h"
 
@@ -19,13 +19,13 @@
 #define MAX_INODE_DPNTR 128 //Maximum number of data block pointers in an inode
 
 #ifndef DEBUG
-#define DEBUG 0
+#define DEBUG 1
 #endif
 
 // Buffer
-std::vector<char*> logBuffer(BLK_SIZE);
-std::vector<char*> overflowBuffer(130); //128 data blocks + 1 inode + 1 imap
-int logSeekPos, overflowSeekPos;
+char* logBuffer = new char[BLK_SIZE * BLK_SIZE];
+char* overflowBuffer = new char[130]; // 128 data blocks + 1 inode + 1 imap
+int logBufferPos;
 int currentSegment;
 IMap currentIMap(0);
 bool bufferFull;
@@ -38,57 +38,30 @@ std::vector<std::pair<std::string, int> > filelist = filemap.populate();
 ChkptRegion chkptregion("./DRIVE/CHECKPOINT_REGION");
 
 /**
- * TODO:
- * Handle overwrites
- * Write full buffer to segment
- */
-
-void initialPad(std::vector<char*> buffer)
-{
-    char zeros[1024] = {0};
-    for(int i = 0; i < 8; ++i)
-    {
-        buffer[i] = strdup(zeros);
-    }
-
-}
-
-/**
- * Clear buffer
- */
-void clear(std::vector<char*> buffer)
-{
-    for(auto iter = buffer.begin(); iter != buffer.end(); ++iter)
-    {
-        delete *iter;
-    }
-}
-
-/**
  * Completes remaining writes and exits.
  */
 void proper_exit()
 {
-    logBuffer.at(logSeekPos) = currentIMap.convertToString();
-    chkptregion.addimap(logSeekPos+(currentSegment * BLK_SIZE));
+    //logBuffer.at(logBufferPos) = currentIMap.convertToString();
+    //chkptregion.addimap(logBufferPos + (currentSegment * BLK_SIZE));
 
-    if (DEBUG) std::cerr << "Current imap: " << std::string(logBuffer.at(logSeekPos-1)) << std::endl;
+    //if (DEBUG) std::cerr << "Current imap: " << std::string(logBuffer.at(logBufferPos - 1)) << std::endl;
+
+    // Update segment
+    chkptregion.markSegment(currentSegment, true);
 
     // Write buffer into the segment file
-    std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment+1);
+    std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment + 1);
     if (DEBUG) std::cerr << "Segment file: " << segmentFile << std::endl;
+    
     std::ofstream ofs(segmentFile);
-
-    if(ofs.is_open())
+    if(!ofs.is_open())
     {
-        for(int i = 8; i < logSeekPos; ++i)
-        {
-            if (DEBUG) std::cerr << "index: " << i << std::endl;
-            ofs << std::string(logBuffer[i]);
-        }
-        ofs.close();
+        std::cerr << "[ERROR] Could not open SEGMENT file for reading" << std::endl;
+        exit(1);
     }
-    clear(logBuffer);
+    ofs.write(logBuffer, BLK_SIZE * BLK_SIZE);
+    ofs.close();
 
     // Successfully exit
     exit(0);
@@ -99,12 +72,13 @@ void proper_exit()
  */
 void list_files()
 {
-    for (auto file : filelist)
+    // Lab 7 Code
+    /*for (auto file : filelist)
     {
         std::cout << file.first << " (" << file.second << ")" << std::endl;
-    }
+    }*/
 
-    /*auto fileList = filemap.getFilemap();
+    auto fileList = filemap.getFilemap();
     auto imapCR = chkptregion.getimapArray();
     for (auto it = fileList.begin(); it != fileList.end(); ++it)
     {
@@ -117,12 +91,12 @@ void list_files()
                 int idx = ((int)(*mapIt / 1024.0)) + 1;
                 std::ifstream in("./DRIVE/SEGMENT" + std::to_string(idx));
                 std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-                char *tmpBuffer = contents.c_str();
-                char ptr = tmpBuffer[inodeNum];
+                // const char *tmpBuffer = contents.c_str();
+                // char ptr = tmpBuffer[inodeNum];
             }
         }
         std::cout << currName << "\t" << inodeNum << std::endl;
-    }*/
+    }
 }
 
 /**
@@ -130,59 +104,49 @@ void list_files()
  */
 void import_file(std::string& originalName, std::string& lfsName)
 {
-    const char *fname = originalName.c_str();
-    FileProcessor processor(fname); // Open file
-    char *bytes;
-
-    /* Setup inode */
-    INode i(lfsName);
-    i.setSize(processor.filesize);
-    if (DEBUG) std::cerr << "Filesize: " << processor.filesize << std::endl;
-
-    while (!processor.isDone())
+    // Open file for reading
+    std::ifstream ifs(originalName, std::ifstream::binary);
+    if(!ifs.is_open())
     {
-        bytes = processor.readBytes();
-        //std::cerr << "Finished reading bytes" << std::endl;
-        //std::cerr << "logSeekPos: " << logSeekPos << ", logBuffer.size(): " << logBuffer.size() << std::endl;
+        std::cerr << "[ERROR] Could not open file for reading" << std::endl;
+        exit(1);
+    }
 
-        /* Write data into buffer here */
-        if(logSeekPos < 1024)
+    // Get file size
+    ifs.seekg(0, ifs.end);
+    long size = ifs.tellg();
+    ifs.seekg(0);
+
+    // Allocate memory for file contents
+    char* buffer = new char[size];
+    ifs.read(buffer, size);
+
+    // Setup inode
+    INode inodeObj(lfsName);
+    inodeObj.setSize(size);
+
+    for (int bufferPos = 0; bufferPos < size; bufferPos += BLK_SIZE)
+    {
+        if (inodeObj.dataPointers.size() < 128)
         {
-            logBuffer.at(logSeekPos) = strdup(bytes); //Replace c_string w/ string, shallow copy
+            // Absolute position in memory
+            inodeObj.dataPointers.push_back((BLK_SIZE * currentSegment) + logBufferPos);
         }
-        else
+
+        for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
         {
-            //Write into overflowBuffer
-            overflowBuffer.at(logSeekPos-1016) = strdup(bytes);
-            overflowSeekPos = logSeekPos-1016;
-            if(!bufferFull) bufferFull = true;
+            logBuffer[logBufferPos + offset] = buffer[bufferPos + offset];
         }
-
-        i.dataPointers.push_back((BLK_SIZE * currentSegment)+logSeekPos); //Absolute position in memory
-        logSeekPos++;
     }
-
-    // Insert inode at end of data blocks
-    if(logSeekPos < 1024)
-    {
-        logBuffer.at(logSeekPos) = i.convertToString();
-    }
-    else
-    {
-        bufferFull = true;
-        overflowSeekPos = logSeekPos-1016;
-        overflowBuffer.at(overflowSeekPos) = i.convertToString();
-    }
-
+    
     if (DEBUG) std::cerr << "[DEBUG] Created INode" << std::endl;
 
     // Add inode to imap
-    int createdInodeNum = currentIMap.addinode(logSeekPos+((currentSegment) * BLK_SIZE));
+    int createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);
 
     // Add file-inode association to filemap
     filemap.addFile(lfsName, createdInodeNum);
-    filelist.push_back(std::make_pair(lfsName, processor.filesize));
-    ++logSeekPos;
+    filelist.push_back(std::make_pair(lfsName, size));
     if (DEBUG) std::cerr << "[DEBUG] INode # " << createdInodeNum << " is tracked in IMap # " << 0 << std::endl;
     if (DEBUG) std::cerr << "[DEBUG] Import Complete" << std::endl;
 }
@@ -234,12 +198,23 @@ void remove_file(std::string& filename)
 
 int main(int argc, char *argv[])
 {
-    // Setup
-    logSeekPos = 8; // Blocks 0-7 in each segment is the segment summary
-    bufferFull = false;
     currentSegment = chkptregion.getNextFreeSeg();
     if (DEBUG) std::cerr << "Current segment: " << currentSegment << std::endl;
-    initialPad(logBuffer);
+
+    // Grab contents of current segment
+    std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment + 1);
+
+    // Open segment for reading
+    std::ifstream ifs(segmentFile, std::ifstream::binary);
+    if(!ifs.is_open())
+    {
+        std::cerr << "[ERROR] Could not open '" << segmentFile << "' file for reading" << std::endl;
+        exit(1);
+    }
+    ifs.read(logBuffer, BLK_SIZE * BLK_SIZE);
+    ifs.close();
+
+    logBufferPos = 8 * BLK_SIZE;
 
     // Exit with an error message if argument count is incorrect (i.e. expecting one: input file path)
     if (argc != 1)
@@ -270,11 +245,6 @@ int main(int argc, char *argv[])
         {
             proper_exit();
         }
-        else if (tokens[0] == "show" && DEBUG)
-        {
-            for(int i = 0; i < logSeekPos+1; ++i)
-                std::cout << std::string(logBuffer.at(i)) << std::endl;
-        }
         else if (tokens[0] == "list" && tokens.size() == 1)
         {
             list_files();
@@ -293,7 +263,7 @@ int main(int argc, char *argv[])
             else
             {
                 import_file(tokens[1], tokens[2]);
-                if(currentIMap.isFull())
+                /*if(currentIMap.isFull())
                 {
                     if(bufferFull)
                     {
@@ -322,7 +292,7 @@ int main(int argc, char *argv[])
                     }
                     clear(logBuffer);
                     initialPad(logBuffer);
-                }
+                }*/
             }
         }
         else if (tokens[0] == "remove" && tokens.size() == 2)

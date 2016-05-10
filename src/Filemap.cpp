@@ -1,8 +1,8 @@
-#include "filemap.h"
+#include "Filemap.h"
 
 #include <sstream>
 
-Filemap::Filemap(std::string filename): filename(filename)
+Filemap::Filemap(std::string filename):filename(filename)
 {
     std::ifstream ifs(filename);
     if(ifs.is_open())
@@ -38,7 +38,7 @@ Filemap::~Filemap()
     {
         for(auto iter = filemap.begin(); iter != filemap.end(); ++iter)
         {
-            //std::cerr << iter->first << ": " << iter->second << std::endl;
+            std::cerr << "File > " << iter->first << ": " << iter->second << std::endl;
             ofs << iter->first << " " << std::to_string(iter->second) << std::endl;
         }
         ofs.close();

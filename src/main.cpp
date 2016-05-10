@@ -7,6 +7,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 #include "Filemap.h"
 #include "ChkptRegion.h"
@@ -15,24 +16,26 @@
 
 #define BLK_SIZE 1024
 #define MAX_FILE_NUM 10000
-#define MAX_INODE_DPNTR 128 //Maximum number of data block pointers in an inode
+#define MAX_INODE_DPNTR 128 // Maximum number of data block pointers in an inode
 #define SEGMENT_SIZE BLK_SIZE * BLK_SIZE
+#define IMAP_PIECE_COUNT 40
 
 #ifndef DEBUG
 #define DEBUG 1
 #endif
 
 // Buffer
-char* logBuffer = new char[BLK_SIZE * BLK_SIZE];
+char* logBuffer = new char[SEGMENT_SIZE];
 char* overflowBuffer = new char[130 * BLK_SIZE]; // 128 data blocks + 1 inode + 1 imap
 int logBufferPos, overBufPos;
 int currentSegment;
 IMap currentIMap(0);
+IMap* listIMap = new IMap[IMAP_PIECE_COUNT];
 bool bufferFull;
 
 // Filemap
 Filemap filemap("./DRIVE/FILEMAP");
-std::vector<std::pair<std::string, int> > filelist = filemap.populate();
+std::vector<std::pair<std::string, int> > filelist;
 
 // Checkpoint region
 ChkptRegion chkptregion("./DRIVE/CHECKPOINT_REGION");
@@ -48,7 +51,8 @@ void proper_exit()
             BLK_SIZE);
     delete imapStr;
     currentIMap.clear();
-    chkptregion.addimap((BLK_SIZE * currentSegment) + logBufferPos);
+    chkptregion.addimap((BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE));
+    if (DEBUG) std::cerr << "Imap located at: " << (BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE) << std::endl;
     //logBuffer.at(logBufferPos) = currentIMap.convertToString();
     //chkptregion.addimap(logBufferPos + (currentSegment * BLK_SIZE));
 
@@ -63,10 +67,10 @@ void proper_exit()
     std::ofstream ofs(segmentFile);
     if(!ofs.is_open())
     {
-        std::cerr << "[ERROR] Could not open SEGMENT file for reading" << std::endl;
+        std::cerr << "[ERROR] Could not open SEGMENT file for writing" << std::endl;
         exit(1);
     }
-    ofs.write(logBuffer, BLK_SIZE * BLK_SIZE);
+    ofs.write(logBuffer, SEGMENT_SIZE);
     ofs.close();
 
     // Successfully exit
@@ -78,30 +82,33 @@ void proper_exit()
  */
 void list_files()
 {
-    // Lab 7 Code
-    /*for (auto file : filelist)
-    {
-        std::cout << file.first << " (" << file.second << ")" << std::endl;
-    }*/
-
-    auto fileList = filemap.getFilemap();
+    // Get imap piece array
     auto imapCR = chkptregion.getimapArray();
-    for (auto it = fileList.begin(); it != fileList.end(); ++it)
+
+    // Get filenames and their respective inode numbers
+    auto diskFileMap = filemap.getFilemap();
+
+    // Traverse over filenames
+    for (auto it = diskFileMap.begin(); it != diskFileMap.end(); ++it)
     {
-        std::string currName = it->first;
-        int inodeNum = it->second;
+        std::string currName = it->first;   // Filename
+        int inodeNum = it->second;          // Inode number for filename
+
         for (auto mapIt = imapCR.begin(); mapIt != imapCR.end(); ++mapIt)
         {
             if (*mapIt != -1)
             {
-                int idx = ((int)(*mapIt / 1024.0)) + 1;
+                int idx = ((int)(*mapIt / BLK_SIZE)) + 1;
                 std::ifstream in("./DRIVE/SEGMENT" + std::to_string(idx));
-                std::string contents((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
-                // const char *tmpBuffer = contents.c_str();
-                // char ptr = tmpBuffer[inodeNum];
+                in.seekg(*mapIt * BLK_SIZE);
+                int blockNum = 0;
+                for (int i = 0; i < 40; i++)
+                {
+                    in.read((char*)&blockNum, sizeof(blockNum));
+                }
             }
+            std::cout << currName << "\t" << inodeNum << std::endl;
         }
-        std::cout << currName << "\t" << inodeNum << std::endl;
     }
 }
 
@@ -147,7 +154,7 @@ void import_file(std::string& originalName, std::string& lfsName)
         if(logBufferPos < SEGMENT_SIZE)
         {
             // Absolute position in memory
-            inodeObj.addDataPointer((BLK_SIZE * currentSegment) + logBufferPos);
+            inodeObj.addDataPointer((BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE));
 
             for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
             {
@@ -177,30 +184,30 @@ void import_file(std::string& originalName, std::string& lfsName)
     if(!bufferFull)
     {
         memcpy(&logBuffer[logBufferPos], inodeStr, sizeof(INodeInfo));
+        createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE));
+        if (DEBUG) std::cerr << "[DEBUG] INode # " << createdInodeNum << " at location " << (BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE) << std::endl;
         logBufferPos += BLK_SIZE;
-        createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);
     }
     else
     {
         memcpy(&overflowBuffer[overBufPos], inodeStr, sizeof(INodeInfo));
-        overBufPos += BLK_SIZE;
         createdInodeNum = currentIMap.addinode((BLK_SIZE * (currentSegment + 1)) + overBufPos + 8*BLK_SIZE);
+        if (DEBUG) std::cerr << "[DEBUG] INode # " << createdInodeNum << " at location " << (BLK_SIZE * (currentSegment + 1)) + overBufPos + 8*BLK_SIZE << std::endl;
+        overBufPos += BLK_SIZE;
     }
 
     if (DEBUG)
     {
-        std::cerr << "[DEBUG] Created INode" << std::endl;
+        //std::cerr << "[DEBUG] Created INode" << std::endl;
         inodeObj.printValues();
         std::cerr << "Contents of string: " << inodeStr << std::endl;
     }
 
     delete inodeStr;
 
-
     // Add file-inode association to filemap
     filemap.addFile(lfsName, createdInodeNum);
     filelist.push_back(std::make_pair(lfsName, size));
-    if (DEBUG) std::cerr << "[DEBUG] INode # " << createdInodeNum << " is tracked in IMap # " << 0 << std::endl;
     if (DEBUG) std::cerr << "[DEBUG] Import Complete" << std::endl;
 }
 
@@ -251,7 +258,7 @@ void remove_file(std::string& filename)
 int main(int argc, char *argv[])
 {
     currentSegment = chkptregion.getNextFreeSeg();
-    if (DEBUG) std::cerr << "Current segment: " << currentSegment << std::endl;
+    if (DEBUG) std::cerr << "Current segment file: ./DRIVE/SEGMENT" << currentSegment + 1<< std::endl;
 
     // Grab contents of current segment
     std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment + 1);
@@ -263,12 +270,22 @@ int main(int argc, char *argv[])
         std::cerr << "[ERROR] Could not open '" << segmentFile << "' file for reading" << std::endl;
         exit(1);
     }
-    ifs.read(logBuffer, BLK_SIZE * BLK_SIZE);
+    ifs.read(logBuffer, SEGMENT_SIZE);
     ifs.close();
 
     // Initialize buffers' positions
     logBufferPos = 8 * BLK_SIZE; // Start buffer after segment summary blocks
     overBufPos = 0;
+
+    // Set up imap array and last used imap piece
+    auto imapPieceLocs = chkptregion.getimapArray();
+    for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+    {
+        listIMap[i] = IMap(-1);
+        if (DEBUG && imapPieceLocs[i] != 0) std::cerr << "Setting up imap at location: " << imapPieceLocs[i] << std::endl;
+        listIMap[i].setUpImap(std::make_pair(imapPieceLocs[i], i), false);
+    }
+    currentIMap.setUpImap(chkptregion.getLastImapPieceLoc(), true);
 
     // Exit with an error message if argument count is incorrect (i.e. expecting one: input file path)
     if (argc != 1)
@@ -341,7 +358,7 @@ int main(int argc, char *argv[])
                         std::cerr << "[ERROR] Could not open SEGMENT file for reading" << std::endl;
                         exit(1);
                     }
-                    ofs.write(logBuffer, BLK_SIZE * BLK_SIZE);
+                    ofs.write(logBuffer, SEGMENT_SIZE);
                     ofs.close();
 
                     if(DEBUG)
@@ -383,7 +400,7 @@ int main(int argc, char *argv[])
 
                     // Ready imap object for next imap
                     currentIMap.clear();
-                    chkptregion.addimap((BLK_SIZE * currentSegment) + logBufferPos);
+                    chkptregion.addimap((BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE));
 
                     delete imapStr;
 

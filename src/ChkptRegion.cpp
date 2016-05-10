@@ -1,8 +1,5 @@
 #include "ChkptRegion.h"
 
-#include <fstream>
-#include <sstream>
-
 ChkptRegion::ChkptRegion(std::string filename): filename(filename)
 {
     // Open file for reading
@@ -21,7 +18,7 @@ ChkptRegion::ChkptRegion(std::string filename): filename(filename)
     {
         ifs.read((char*)&blockNum, sizeof(blockNum));
         imap[i] = blockNum;
-        std::cerr << "Read in block number: " << blockNum << std::endl;
+        if (blockNum != 0) std::cerr << "Read in block number: " << blockNum << std::endl;
     }
 
     // Close file for reading
@@ -89,4 +86,23 @@ void ChkptRegion::markSegment(int segment, bool state)
             }
         }
     }
+}
+
+std::pair<int, int> ChkptRegion::getLastImapPieceLoc()
+{
+    int lastLoc = -1;
+    int idx = -1;
+    for (int i = 0; i < 40; i++)
+    {
+        if (imap[i] != 0)
+        {
+            lastLoc = imap[i];
+            idx = i;
+        }
+        else
+        {
+            break;
+        }
+    }
+    return std::make_pair(lastLoc, idx);
 }

@@ -3,6 +3,9 @@
 #include <iostream>
 #include <string>
 #include <array>
+#include <utility>
+#include <fstream>
+#include <sstream>
 
 class ChkptRegion
 {
@@ -22,6 +25,7 @@ class ChkptRegion
         int getNextFreeSeg();
         void markSegment(int segment, bool state);
         std::array<int, 40> getimapArray() { return imap; }
+        std::pair<int, int> getLastImapPieceLoc();
 };
 
 #endif

@@ -3,32 +3,24 @@
 INode::~INode() {}
 
 // Constructor
-INode::INode(std::string filenameIn):filename(filenameIn),dataPointers() {}
+INode::INode(std::string filenameIn) : nextDataPointer(0)
+{
+    if(filenameIn.copy(info.filename, filenameIn.size()) <= 0)
+    {
+        std::cerr << "[ERROR]" << std::endl;
+    }
+}
+
+// Don't need to check for filesize
+void INode::addDataPointer(int blockNum)
+{
+    info.dataPointers[nextDataPointer++] = blockNum;
+}
 
 // For packaging data into a string
 char* INode::convertToString()
 {
-    std::string inodeData;
-    inodeData += filename;
-    inodeData += "\n";
-    inodeData += std::to_string(filesize) + "\n";
-    int size = dataPointers.size();
-    for (int i = 0; i < size; i++)
-    {
-        inodeData += std::to_string(dataPointers[i]);
-    }
-
-    /*char dataPointer[4];
-    int mask = 0xFF;
-    for(auto dp : dataPointers)
-    {
-        dataPointer[3] = dp & mask;
-        dataPointer[2] = (dp >> 8) & mask;
-        dataPointer[1] = (dp >> 16) & mask;
-        dataPointer[0] = (dp >> 24) & mask;
-        inodeData += std::string(dataPointer) + "\n";
-    }*/
-
-    char* retChar = strdup(inodeData.c_str());
+    char* retChar = new char[sizeof(INodeInfo)];
+    memcpy(retChar, &info, sizeof(INodeInfo));
     return retChar;
 }

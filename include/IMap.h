@@ -8,7 +8,7 @@
 class IMap
 {
     private:
-        std::array<int, 1024> blockNumbers;
+        int blockNumbers[256];
         int mapPieceNumber, nextAvailinode, numInodes;
         bool imapChanged;
         void calcNextinode();
@@ -21,7 +21,7 @@ class IMap
         void removeinode(int inode);
         int getBlockNumber(int inodeNumber);
         int getMapPieceNumber() { return mapPieceNumber; }
-        bool isFull() {return numInodes == 1024;}
+        bool isFull() {return numInodes == 256;}
         void clear();
         char* convertToString();
 

@@ -52,7 +52,21 @@ void IMap::removeinode(int inode)
 }
 char* IMap::convertToString()
 {
-    std::string imapData;
+    char* blockNums = new char[1024 * sizeof(int)];
+    int sizeInt = sizeof(int);
+    int pos = 0;
+    for(auto inum : blockNumbers)
+    {
+        char blk[sizeInt];
+        sprintf(blk, "%d", inum);
+        for (int i = 0; i < 4; i++)
+        {
+            blockNums[pos + i] = blk[i];
+        }
+        pos += 4;
+    }
+    return blockNums;
+    /*std::string imapData;
     int mask = 0xFF;
     for(int iter = 0, index = 0; iter < numInodes; ++iter, ++index)
     {
@@ -72,8 +86,7 @@ char* IMap::convertToString()
         }
     }
 
-    return strdup(imapData.c_str());
-
+    return strdup(imapData.c_str());*/
 }
 
 void IMap::clear()

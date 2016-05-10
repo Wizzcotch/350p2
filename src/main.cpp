@@ -48,7 +48,8 @@ void proper_exit()
 
     // Write imap to segment
     char* imapStr = currentIMap.convertToString();
-    int strSize = strlen(imapStr);
+    int strSize = BLK_SIZE * sizeof(int);
+    std::cerr << strSize << std::endl;
     for (int i = 0; i < strSize; i++)
     {
         logBuffer[logBufferPos++] = imapStr[i];
@@ -141,7 +142,7 @@ void import_file(std::string& originalName, std::string& lfsName)
 
     inodeObj.setSize(size);
 
-    /* Did not handle case of overwrite */
+    // Did not handle case of overwrite
     for (int bufferPos = 0; bufferPos < size; bufferPos += BLK_SIZE)
     {
         // Absolute position in memory
@@ -158,6 +159,9 @@ void import_file(std::string& originalName, std::string& lfsName)
         logBufferPos = ((logBufferPos / BLK_SIZE) + 1) * BLK_SIZE;
     }
 
+    // Add inode to imap
+    int createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);
+
     // Write inode to segment
     char* inodeStr = inodeObj.convertToString();
     int iSize = (32 * sizeof(char)) + (129 * sizeof(int));
@@ -166,13 +170,10 @@ void import_file(std::string& originalName, std::string& lfsName)
         logBuffer[logBufferPos++] = inodeStr[i];
     }
 
-    // Increment buffer position
+    // Jump to next block
     logBufferPos = ((logBufferPos / BLK_SIZE) + 1) * BLK_SIZE;
 
     if (DEBUG) std::cerr << "[DEBUG] Wrote INode to buffer" << std::endl;
-
-    // Add inode to imap
-    int createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + logBufferPos);
 
     // Add file-inode association to filemap
     filemap.addFile(lfsName, createdInodeNum);

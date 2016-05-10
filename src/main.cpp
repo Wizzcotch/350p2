@@ -124,6 +124,7 @@ void import_file(std::string& originalName, std::string& lfsName)
     // Allocate memory for file contents
     char* buffer = new char[size];
     ifs.read(buffer, size);
+    if (DEBUG) std::cerr << "File size: " << size << std::endl;
 
     // Setup inode
     INode inodeObj(lfsName);
@@ -138,9 +139,11 @@ void import_file(std::string& originalName, std::string& lfsName)
             if (DEBUG) std::cerr << (BLK_SIZE * currentSegment) + logBufferPos << std::endl;
         }
 
-        for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
+        for (int offset = 0; offset < BLK_SIZE; offset++)
         {
-            logBuffer[logBufferPos + offset] = buffer[bufferPos + offset];
+            if (DEBUG) std::cerr << "logBuffer[" << logBufferPos + offset << "] = buffer[" << bufferPos + offset << "];" << std::endl;
+            if (bufferPos + offset >= size - 1) break;
+            logBuffer[logBufferPos++] = buffer[bufferPos + offset];
         }
     }
     

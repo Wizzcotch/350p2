@@ -33,6 +33,6 @@ DRIVE/*
 # Build files
 build/*
 
-# Misc.
-program2
-*.txt
+# Misc
+program2 # Executable
+*.txt # Ignore test .txt files

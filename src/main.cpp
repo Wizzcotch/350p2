@@ -92,6 +92,110 @@ void overwrite_file(std::string& filename, int numBytes, int startLoc, std::stri
     }
     char c = character.at(0);
     if (DEBUG) std::cerr << "Overwriting with '" << c << "'" << std::endl;
+	
+	int currentBlk = 0, currentPos = 0, howMany = -1;
+    if (numBytes > -1) howMany = numBytes;
+    if (startLoc > -1)
+    {
+        currentBlk = ((int)(startLoc / BLK_SIZE));
+        currentPos = startLoc % BLK_SIZE;
+    }
+
+    // Get filenames and their respective inode numbers
+    auto diskFileMap = filemap.getFilemap();
+
+    // Check if file not in memory
+    std::unordered_map<std::string, int>::const_iterator fileIt = diskFileMap.find(filename);
+
+    if (fileIt == diskFileMap.end())
+    {
+        std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+        return;
+    }
+    else
+    {
+        // Inode number for filename
+        int inodeNum = fileIt->second;
+
+        int blockNum = 0;
+        for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+        {
+            blockNum = listIMap[i].getBlockNumber(inodeNum);
+            if (blockNum != -1)
+            {
+                //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+                break;
+            }
+        }
+
+        // Calculate inode location
+        int idx = ((int)(blockNum / BLK_SIZE)) + 1;
+
+        // Open segment file for reading inode information
+        std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
+		std::fstream in(segmentFile , std::fstream::binary | std::fstream::in | std::fstream::out);
+        if(!in.is_open())
+        {
+            std::cerr << "[ERROR] Could not open segment file for overwriting" << std::endl;
+            exit(1);
+        }
+
+        // Seek to inode information in segment file
+        int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
+        int fileFound = false;
+        for (int i = 0; i < remainingSeek; i++)
+        {
+            int dataBlkNum = -1;
+            in.read((char*)&dataBlkNum, sizeof(dataBlkNum));
+			if (DEBUG) std::cerr << "Saved data block num: " << dataBlkNum << std::endl;
+            if (dataBlkNum == -1) break;
+            long savePos = in.tellg();
+            fileFound = true;
+            //if (DEBUG) std::cerr << "Data Block Number: " << (dataBlkNum % BLK_SIZE) * BLK_SIZE << std::endl;
+            char* textBuffer = new char[BLK_SIZE];
+            in.seekg((dataBlkNum % BLK_SIZE) * BLK_SIZE);
+            long dataBlockPos = in.tellg();
+			if (DEBUG) std::cerr << "Saved data block beginning pos: " << dataBlockPos << std::endl;
+            in.read(textBuffer, BLK_SIZE);
+			if (DEBUG) std::cerr << "Current part: " << textBuffer << std::endl;
+			if (DEBUG) std::cerr << "Saved data block num: " << dataBlkNum << std::endl;
+            if (currentBlk > 0)
+            {
+                currentBlk--;
+            }
+            else
+            {
+                for (int j = currentPos; j < BLK_SIZE; j++)
+                {
+                    // Force quit reading if we hit our threshold of number of bytes to read
+                    if (howMany <= 0)
+                    {
+                        remainingSeek = 0;
+                        break;
+                    }
+                    textBuffer[j] = c;
+                    howMany--;
+                }
+				// Overwrite
+				in.seekp(dataBlockPos);
+				in.write(textBuffer, BLK_SIZE);
+				if (DEBUG) std::cerr << "Current part: " << std::string(textBuffer) << std::endl;
+
+                currentPos = 0;
+            }
+            delete[] textBuffer;
+            in.seekg(savePos);
+        }
+
+        if (!fileFound)
+        {
+            std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+            in.close();
+            return;
+        }
+        
+        in.close();
+    }
 }
 
 /**

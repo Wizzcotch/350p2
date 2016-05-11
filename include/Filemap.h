@@ -22,7 +22,6 @@ class Filemap
         std::unordered_map<std::string, int> getFilemap() { return filemap; }
         std::vector<std::pair<std::string, int> > populate();
 
-
 };
 
 #endif

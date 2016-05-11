@@ -1,9 +1,12 @@
 #ifndef IMAP_H
 #define IMAP_H
 
-#include <iostream>
 #include <array>
+#include <iostream>
+#include <fstream>
 #include <string>
+#include <cstring>
+#include <utility>
 
 class IMap
 {
@@ -14,16 +17,17 @@ class IMap
         void calcNextinode();
 
     public:
-        IMap() = delete;
+        IMap();
         IMap(int mapPiece);
         ~IMap();
         int addinode(int blockNumber);
         void removeinode(int inode);
-        int getBlockNumber(int inodeNumber);
+        int getBlockNumber(int inodeNumber) { return blockNumbers[inodeNumber]; }
         int getMapPieceNumber() { return mapPieceNumber; }
         bool isFull() {return numInodes == 256;}
         void clear();
         char* convertToString();
+        void setUpImap(std::pair<int, int> blockInfo, bool checkFull);
 
 };
 

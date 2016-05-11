@@ -39,7 +39,7 @@ void IMap::setUpImap(std::pair<int, int> blockInfo, bool checkFull)
     mapPieceNumber = blockInfo.second;
 
     // Divide by 1MB to figure out what segment our piece is in
-    int segmentNum = blockNum / (1024 * 1024);
+    int segmentNum = blockNum / 1024;
     std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(segmentNum + 1);
 
     if (!checkFull) std::cerr << "Fetching imap at segment #: " << segmentNum + 1 << std::endl;

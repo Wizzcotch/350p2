@@ -586,9 +586,40 @@ void overwrite_file(std::string& filename, int numBytes, int startLoc, std::stri
             exit(1);
         }
         in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32);
+
+        // Save filesize's position for later update if necessary
         long filesizePos = in.tellg();
+
+        // Read file size
         int filesizeRead = -1;
         in.read((char*)&filesizeRead, sizeof(filesizeRead));
+        
+        /**
+         * Calculate if another data block must be allocated
+         */
+
+        // Calculate remaining additional bytes to be written to
+        int additionalBytes = numBytes - (filesizeRead - currentPos);
+
+        // Set to 0 if we don't need additional bytes
+        if (additionalBytes < 0) additionalBytes = 0;
+
+        // Check if data block is necessary
+        int totalRoom = (((int)(filesizeRead / BLK_SIZE)) + 1) * BLK_SIZE;
+        int roomLeft = totalRoom - filesizeRead;
+        bool allocateBlock = roomLeft < additionalBytes;
+        int diff = (additionalBytes - roomLeft < 0) ? 0 : additionalBytes - roomLeft;
+        if (DEBUG)
+        {
+            std::cerr << "We have " << totalRoom << " bytes in total, but can only fit in " << roomLeft << " bytes" << std::endl;
+            std::cerr << "We have " << additionalBytes << " bytes to put in, and have " << diff << " bytes left to allocate in new data blocks" << std::endl;
+        }
+        int numBlocksToAllocate = ((int)(diff / BLK_SIZE)) + 1;
+        int newFileSize = filesizeRead + additionalBytes;
+        long checkPoint = in.tellp();
+        in.seekp(filesizePos, std::fstream::beg);
+        in.write(reinterpret_cast<const char *>(&newFileSize), sizeof(int));
+        in.seekp(checkPoint, std::fstream::beg);
 
         // Seek to inode information in segment file
         int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
@@ -596,6 +627,7 @@ void overwrite_file(std::string& filename, int numBytes, int startLoc, std::stri
         for (int i = 0; i < remainingSeek; i++)
         {
             int dataBlkNum = -1;
+            long goBack = in.tellg();
             in.read((char*)&dataBlkNum, sizeof(dataBlkNum));
             if (DEBUG) std::cerr << "Return to Data Block #: " << dataBlkNum << std::endl;
 
@@ -603,9 +635,23 @@ void overwrite_file(std::string& filename, int numBytes, int startLoc, std::stri
             {
                 if (wrote && howMany > 0)
                 {
-
+                    if (allocateBlock && numBlocksToAllocate > 0)
+                    {
+                        int newDataBlock = (BLK_SIZE * idx) + logBufferPos/BLK_SIZE;
+                        if (DEBUG) std::cerr << "Writing new data block: " << newDataBlock << std::endl;
+                        long lastPos = in.tellp();
+                        in.seekp(goBack, std::fstream::beg);
+                        in.write(reinterpret_cast<const char *>(&newDataBlock), sizeof(int));
+                        in.seekp(lastPos, std::fstream::beg);
+                        dataBlkNum = newDataBlock;
+                        if (DEBUG) std::cerr << "Return to Data Block #: " << dataBlkNum << std::endl;
+                        numBlocksToAllocate--;
+                    }
                 }
-                break;
+                else
+                {
+                    break;
+                }
             }
             long savePos = in.tellg();
             fileFound = true;

@@ -95,7 +95,8 @@ void cat_file(std::string& filename, int numBytes, int startLoc)
     if (startLoc > -1)
     {
         currentBlk = ((int)(startLoc / BLK_SIZE));
-        currentPos = startLoc % BLK_SIZE;
+        currentPos = (startLoc % BLK_SIZE) - 1;
+        if (currentPos < 0) currentPos = 0;
     }
 
     // Get filenames and their respective inode numbers
@@ -393,7 +394,7 @@ void import_file(std::string& originalName, std::string& lfsName)
     }
     else if(lfsName.size() > 32)
     {
-        std::cerr << "[ERROR] File name '" << lfsName << "' too long" << std::endl;
+        std::cout << "[ERROR] File name '" << lfsName << "' too long" << std::endl;
     }
 
     // Get file size
@@ -409,7 +410,7 @@ void import_file(std::string& originalName, std::string& lfsName)
     INode inodeObj(lfsName);
     if(size / BLK_SIZE > 128 || (size / BLK_SIZE == 128 && size % BLK_SIZE > 0))
     {
-        std::cerr << "[ERROR] File '" << originalName << "' too big." << std::endl;
+        std::cout << "[ERROR] File '" << originalName << "' too big." << std::endl;
         //std::cerr << "Filesize: " << size / BLK_SIZE << std::endl;
         return;
     }
@@ -422,7 +423,7 @@ void import_file(std::string& originalName, std::string& lfsName)
         {
             // Absolute position in memory
             inodeObj.addDataPointer((BLK_SIZE * currentSegment) + logBufferPos/BLK_SIZE);
-            //if (DEBUG) std::cerr << (BLK_SIZE * currentSegment) + logBufferPos/BLK_SIZE << std::endl;
+            if (DEBUG) std::cerr << (BLK_SIZE * currentSegment) + logBufferPos/BLK_SIZE << std::endl;
             for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
             {
                 logBuffer[logBufferPos + offset] = buffer[bufferPos + offset];
@@ -463,7 +464,7 @@ void import_file(std::string& originalName, std::string& lfsName)
     {
         memcpy(&overflowBuffer[overBufPos], inodeStr, sizeof(INodeInfo));
         createdInodeNum = currentIMap.addinode((BLK_SIZE * (currentSegment + 1)) + overBufPos/BLK_SIZE + 8);
-        if (DEBUG) std::cerr << "[DEBUG] INode # " << createdInodeNum << " at location " << (BLK_SIZE * (currentSegment + 1)) + overBufPos/BLK_SIZE + 8<< std::endl;
+        if (DEBUG) std::cerr << "[DEBUG] INode # " << createdInodeNum << " at location " << (BLK_SIZE * (currentSegment + 1)) + overBufPos/BLK_SIZE + 8 << std::endl;
         overBufPos += BLK_SIZE;
     }
 
@@ -471,6 +472,7 @@ void import_file(std::string& originalName, std::string& lfsName)
 
     // Add file-inode association to filemap
     filemap.addFile(lfsName, createdInodeNum);
+    //if (DEBUG) std::cerr << "Added file '" << lfsName << "' at iNode #" << filemap.getinodeNumber(lfsName) << std::endl;
     filelist.push_back(std::make_pair(lfsName, size));
     if (DEBUG) std::cerr << "[DEBUG] Import Complete" << std::endl;
 
@@ -490,7 +492,7 @@ void remove_file(std::string& filename)
     });
     if (it == filelist.end())
     {
-        std::cerr << "[ERROR] File < " << filename << " > not found (does it exist?)" << std::endl;
+        std::cout << "[ERROR] File < " << filename << " > not found (does it exist?)" << std::endl;
     }
     else
     {
@@ -520,6 +522,143 @@ void remove_file(std::string& filename)
             //}
         //}
     //}
+}
+
+/**
+ * Overwrites a specified section of the LFS file's contents.
+ */
+void overwrite_file(std::string& filename, int numBytes, int startLoc, std::string& character)
+{
+    if (character.length() != 1)
+    {
+        std::cout << "[ERROR] Overwrite command expects single character" << std::endl;
+        return;
+    }
+    char c = character.at(0);
+    if (DEBUG) std::cerr << "Overwriting with '" << c << "'" << std::endl;
+    
+    int currentBlk = 0, currentPos = 0, howMany = -1;
+    if (numBytes > -1) howMany = numBytes;
+    if (startLoc > -1)
+    {
+        currentBlk = ((int)(startLoc / BLK_SIZE));
+        currentPos = (startLoc % BLK_SIZE) - 1;
+        if (currentPos < 0) currentPos = 0;
+    }
+
+    // Get filenames and their respective inode numbers
+    auto diskFileMap = filemap.getFilemap();
+    bool wrote = false;
+
+    // Check if file not in memory
+    std::unordered_map<std::string, int>::const_iterator fileIt = diskFileMap.find(filename);
+
+    if (fileIt == diskFileMap.end())
+    {
+        std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+        return;
+    }
+    else
+    {
+        // Inode number for filename
+        int inodeNum = fileIt->second;
+
+        int blockNum = 0;
+        for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+        {
+            blockNum = listIMap[i].getBlockNumber(inodeNum);
+            if (blockNum != -1)
+            {
+                //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+                break;
+            }
+        }
+
+        // Calculate inode location
+        int idx = ((int)(blockNum / BLK_SIZE)) + 1;
+
+        // Open segment file for reading inode information
+        std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
+        std::fstream in(segmentFile , std::fstream::binary | std::fstream::in | std::fstream::out);
+        if(!in.is_open())
+        {
+            std::cerr << "[ERROR] Could not open segment file for overwriting" << std::endl;
+            exit(1);
+        }
+        in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32);
+        long filesizePos = in.tellg();
+        int filesizeRead = -1;
+        in.read((char*)&filesizeRead, sizeof(filesizeRead));
+
+        // Seek to inode information in segment file
+        int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
+        int fileFound = false;
+        for (int i = 0; i < remainingSeek; i++)
+        {
+            int dataBlkNum = -1;
+            in.read((char*)&dataBlkNum, sizeof(dataBlkNum));
+            if (DEBUG) std::cerr << "Return to Data Block #: " << dataBlkNum << std::endl;
+
+            if (dataBlkNum == -1)
+            {
+                if (wrote && howMany > 0)
+                {
+
+                }
+                break;
+            }
+            long savePos = in.tellg();
+            fileFound = true;
+
+            char* textBuffer = new char[BLK_SIZE];
+            in.seekg((dataBlkNum % BLK_SIZE) * BLK_SIZE, std::fstream::beg);
+            long dataBlockPos = in.tellg();
+            if (DEBUG) std::cerr << "Return to file position #: " << dataBlockPos << std::endl;
+
+            in.read(textBuffer, BLK_SIZE);
+            if (DEBUG) std::cerr << "Starting part: " << textBuffer << std::endl;
+
+            if (currentBlk > 0)
+            {
+                currentBlk--;
+            }
+            else
+            {
+                for (int j = currentPos; j < BLK_SIZE; j++)
+                {
+                    // Force quit reading if we hit our threshold of number of bytes to read
+                    if (howMany <= 0)
+                    {
+                        remainingSeek = 0;
+                        break;
+                    }
+                    textBuffer[j] = c;
+                    wrote = true;
+                    howMany--;
+                }
+                // Overwrite
+                in.seekp(dataBlockPos, std::fstream::beg);
+                if (DEBUG) std::cerr << "Seeked (for overwrite) to file position #: " << in.tellg() << std::endl;
+
+                in.write(textBuffer, BLK_SIZE);
+                if (DEBUG) std::cerr << "Current part: " << std::string(textBuffer) << std::endl;
+
+                currentPos = 0;
+            }
+            delete[] textBuffer;
+            in.seekg(savePos, std::fstream::beg);
+            if (DEBUG) std::cerr << "Seeked (for save point) to file position #: " << in.tellg() << std::endl;
+        }
+
+        if (!fileFound)
+        {
+            std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+            in.close();
+            return;
+        }
+        
+        in.close();
+    }
 }
 
 int main(int argc, char *argv[])
@@ -601,6 +740,10 @@ int main(int argc, char *argv[])
         else if (tokens[0] == "display" && tokens.size() == 4)
         {
             cat_file(tokens[1], std::stoi(tokens[2]), std::stoi(tokens[3]));
+        }
+        else if (tokens[0] == "overwrite" && tokens.size() == 5)
+        {
+            overwrite_file(tokens[1], std::stoi(tokens[2]), std::stoi(tokens[3]), tokens[4]);
         }
         else if (tokens[0] == "import" && tokens.size() == 3)
         {

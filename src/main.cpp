@@ -38,7 +38,7 @@ bool completedOperations = false; // Changes were made
 
 // Filemap
 Filemap filemap("./DRIVE/FILEMAP");
-std::vector<std::pair<std::string, int> > filelist;
+std::vector<std::pair<std::string, int> > filelist; //Only contains newly imported files
 
 // Checkpoint region
 ChkptRegion chkptregion("./DRIVE/CHECKPOINT_REGION");
@@ -200,6 +200,11 @@ void overwrite_file(std::string& filename, int numBytes, int startLoc, std::stri
 
 /**
  * Cats the specified file or displays a certain number of bytes.
+ *
+ * TESTING:
+ *  Check if startLoc exceed filesize
+ *  Functions properly on data blocks between segments (as a result of overflow)
+ *  Functions properly on data blocks currently in memory instead of in disk
  */
 void cat_file(std::string& filename, int numBytes, int startLoc)
 {
@@ -214,121 +219,211 @@ void cat_file(std::string& filename, int numBytes, int startLoc)
     // Get filenames and their respective inode numbers
     auto diskFileMap = filemap.getFilemap();
 
-    // Check if file not in memory
+    // Ensure it's not a file being dealt in memory
     std::unordered_map<std::string, int>::const_iterator fileIt = diskFileMap.find(filename);
 
     if (fileIt == diskFileMap.end())
     {
-        //if (DEBUG) std::cerr << diskFileMap[filename].first << std::endl;
         std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
         return;
+    }
 
-        // Inode number for filename
-        /*if (DEBUG) std::cerr << "Found '" << filename << "' at iNode #" << inodeNum << std::endl;
+    // Inode number for filename
+    int inodeNum = fileIt->second;
 
-        int blockNum = 0;
-        for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+    int blockNum = 0;
+    for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+    {
+        blockNum = listIMap[i].getBlockNumber(inodeNum);
+        if (blockNum != -1)
         {
-            blockNum = listIMap[i].getBlockNumber(inodeNum);
-            if (blockNum != -1)
-            {
-                //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
-                break;
-            }
+            //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+            break;
+        }
+    }
+
+    // Find inode entry in imap piece buffer
+    if(blockNum == -1)
+    {
+        blockNum = currentIMap.getBlockNumber(inodeNum);
+        //if(DEBUG && blockNum != -1) std::cerr << "Block number found in currentIMap: " << blockNum << std::endl;
+    }
+
+    // Calculate inode location (i.e. segment)
+    int idx = ((int)(blockNum / BLK_SIZE)) + 1;
+
+    // Important variables
+    int* dataPointers; //Array of data block pointers
+    int remainingSeek = -1; //Remaining blocks to seek
+    std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
+    std::ifstream in;
+    char inodeBuffer[BLK_SIZE];
+    bool inodeInBuffer = false, segmentFileOpen = false;
+
+    // Check if in memory or stored in segment
+    if(idx-1 == currentSegment)
+    {
+        memcpy(&inodeBuffer, &logBuffer[(blockNum % BLK_SIZE) * BLK_SIZE], BLK_SIZE);
+        memcpy((char*)&remainingSeek, &inodeBuffer[32], sizeof(int));
+        /*if(DEBUG)
+        {
+            std::cerr << "blockNum: " << blockNum << std::endl;
+            std::cerr << "remainingSeek: " << remainingSeek << std::endl;
+            std::cerr << "INode location at: " << blockNum % BLK_SIZE << std::endl;
         }*/
+        inodeInBuffer = true;
     }
     else
     {
-        // Inode number for filename
-        int inodeNum = fileIt->second;
-
-        int blockNum = 0;
-        for (int i = 0; i < IMAP_PIECE_COUNT; i++)
-        {
-            blockNum = listIMap[i].getBlockNumber(inodeNum);
-            if (blockNum != -1)
-            {
-                //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
-                break;
-            }
-        }
-
-        // Calculate inode location
-        int idx = ((int)(blockNum / BLK_SIZE)) + 1;
-
         // Open segment file for reading inode information
-        std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
-        std::ifstream in(segmentFile, std::ifstream::binary);
+        in.open(segmentFile, std::ifstream::binary);
         if(!in.is_open())
         {
             std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
-            exit(1);
-        }
-
-        // Seek to inode information in segment file
-        in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32 + sizeof(int));
-        int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
-        int fileFound = false;
-        for (int i = 0; i < remainingSeek; i++)
-        {
-            int dataBlkNum = -1;
-            in.read((char*)&dataBlkNum, sizeof(dataBlkNum));
-            int savePos = in.tellg();
-            if (dataBlkNum == -1) break;
-            fileFound = true;
-            //if (DEBUG) std::cerr << "Data Block Number: " << (dataBlkNum % BLK_SIZE) * BLK_SIZE << std::endl;
-            char* textBuffer = new char[BLK_SIZE];
-            in.seekg((dataBlkNum % BLK_SIZE) * BLK_SIZE);
-            in.read(textBuffer, BLK_SIZE);
-            if (currentBlk > 0)
-            {
-                currentBlk--;
-            }
-            else
-            {
-                std::string s = "";
-
-                // Display portion of file
-                if (howMany != -1)
-                {
-                    for (int j = currentPos; j < BLK_SIZE; j++)
-                    {
-                        // Force quit reading if we hit our threshold of number of bytes to read
-                        if (howMany <= 0)
-                        {
-                            remainingSeek = 0;
-                            break;
-                        }
-                        s += textBuffer[j];
-                        howMany--;
-                    }
-                }
-                // Display whole file
-                else
-                {
-                    for (int j = currentPos; j < BLK_SIZE; j++)
-                    {
-                        s += textBuffer[j];
-                    }
-                }
-
-                std::cout << s;
-                currentPos = 0;
-            }
-            delete[] textBuffer;
-            in.seekg(savePos);
-        }
-        std::cout << std::endl;
-
-        if (!fileFound)
-        {
-            std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
-            in.close();
             return;
         }
-        
-        in.close();
+
+        segmentFileOpen = true;
+        // Seek to inode information in segment file
+        //in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32 + sizeof(int));
+        //int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
+        in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32);
+
+        // Read filesize
+        in.read((char*)&remainingSeek, sizeof(remainingSeek));
+        //if(DEBUG) std::cerr << "[DEBUG](main-cat) Filesize: " <<  remainingSeek << std::endl;
+
     }
+
+    //int filesize = remainingSeek; //Filesize in bytes
+    remainingSeek = (remainingSeek % BLK_SIZE == 0) ? remainingSeek / BLK_SIZE : remainingSeek / BLK_SIZE + 1;
+
+    //if(DEBUG) std::cerr << "[DEBUG](main-cat) Filesize in blocks: " << remainingSeek << std::endl;
+
+    if(remainingSeek > 0)
+    {
+        dataPointers = new int[remainingSeek];
+    }
+    else
+    {
+        std::cout << "[ERROR] Invalid filesize" << std::endl;
+        return;
+    }
+
+    if(!dataPointers)
+    {
+        std::cout << "[ERROR] Problem allocating memory in cat_file()" << std::endl;
+        return;
+    }
+
+    // Put data block numbers in an array
+    for (int i = 0; i < remainingSeek; i++)
+    {
+        dataPointers[i] = -1;
+        if(!inodeInBuffer) in.read((char*)&dataPointers[i], sizeof(int));
+        else memcpy((char*)&dataPointers[i], &inodeBuffer[32 + (i+1) * sizeof(int)], sizeof(int));
+    }
+
+
+    int fileFound = false;
+    int catSegment = idx; //Segment that cat is currently in
+    for (int i = 0; i < remainingSeek; i++)
+    {
+        //int dataPointers[i] = -1;
+        //in.read((char*)&dataPointers[i], sizeof(dataPointers[i]));
+        /*if(DEBUG)
+        {
+            std::cerr << "[DEBUG] dataPointers[i]: " << dataPointers[i] << std::endl;
+            std::cerr << "catSegment: " << catSegment << std::endl;
+            std::cerr << "fetching segment: " << dataPointers[i] / BLK_SIZE + 1 << std::endl;
+        }*/
+
+        int savePos = in.tellg();
+        if (dataPointers[i] == -1) break;
+        fileFound = true;
+        //if (DEBUG) std::cerr << "Data Block Number: " << (dataPointers[i] % BLK_SIZE) * BLK_SIZE << std::endl;
+        char* textBuffer = new char[BLK_SIZE];
+
+        if((dataPointers[i] / BLK_SIZE) == currentSegment)
+        {
+            memcpy(textBuffer, &logBuffer[(dataPointers[i] % BLK_SIZE) * BLK_SIZE], BLK_SIZE);
+        }
+        /* ===== Start here for overflow ===== */
+        else if((dataPointers[i] / BLK_SIZE) + 1 != catSegment) {
+            /*if (DEBUG)
+            {
+                std::cerr << "[DEBUG] Data in different place" << std::endl;
+                std::cerr << "catSegment: " << catSegment << std::endl;
+                std::cerr << "fetching segment: " << dataPointers[i] / BLK_SIZE + 1 << std::endl;
+            }*/
+
+            // Load up the new segment and continue
+            if(segmentFileOpen) in.close();
+            catSegment = dataPointers[i] / BLK_SIZE + 1;
+            segmentFile = "./DRIVE/SEGMENT" + std::to_string(catSegment);
+            in.open(segmentFile, std::ifstream::binary);
+            if(!in.is_open())
+            {
+                std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
+                delete[] textBuffer;
+                return;
+            }
+
+        }
+
+        if(dataPointers[i] / BLK_SIZE != currentSegment)
+        {
+            in.seekg((dataPointers[i] % BLK_SIZE) * BLK_SIZE);
+            in.read(textBuffer, BLK_SIZE);
+        }
+
+        if (currentBlk > 0)
+        {
+            currentBlk--;
+        }
+        else
+        {
+            std::string s = "";
+
+            // Display portion of file
+            if (howMany != -1)
+            {
+                for (int j = currentPos; j < BLK_SIZE; j++)
+                {
+                    // Force quit reading if we hit our threshold of number of bytes to read
+                    if (howMany <= 0)
+                    {
+                        remainingSeek = 0;
+                        break;
+                    }
+                    s += textBuffer[j];
+                    howMany--;
+                }
+            }
+            // Display whole file
+            else
+            {
+                for (int j = currentPos; j < BLK_SIZE; j++)
+                {
+                    s += textBuffer[j];
+                }
+            }
+
+            std::cout << s;
+            currentPos = 0;
+        }
+        delete[] textBuffer;
+        if(segmentFileOpen && dataPointers[i] / BLK_SIZE != currentSegment) in.seekg(savePos);
+    }
+    std::cout << std::endl;
+
+    if (!fileFound)
+    {
+        std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+        in.close();
+        return;
+    }
+    if(segmentFileOpen) in.close();
 }
 
 /**
@@ -455,7 +550,11 @@ void import_file(std::string& originalName, std::string& lfsName)
         }
         else
         {
-            if(!bufferFull) bufferFull = true;
+            if(!bufferFull)
+            {
+                bufferFull = true;
+                if(DEBUG) std::cerr << "[DEBUG] Writing into overflow buffer" << std::endl;
+            }
             /* Did not check if currentSegment exceeds 32 */
             inodeObj.addDataPointer((BLK_SIZE * (currentSegment + 1)) + overBufPos/BLK_SIZE + 8);
             for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
@@ -471,7 +570,7 @@ void import_file(std::string& originalName, std::string& lfsName)
 
     /* Record inode in imap */
     int createdInodeNum;
-    if(!bufferFull)
+    if(!bufferFull && logBufferPos < SEGMENT_SIZE)
     {
         memcpy(&logBuffer[logBufferPos], inodeStr, sizeof(INodeInfo));
         createdInodeNum = currentIMap.addinode((BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE));
@@ -481,8 +580,8 @@ void import_file(std::string& originalName, std::string& lfsName)
     else
     {
         memcpy(&overflowBuffer[overBufPos], inodeStr, sizeof(INodeInfo));
-        createdInodeNum = currentIMap.addinode((BLK_SIZE * (currentSegment + 1)) + overBufPos + 8*BLK_SIZE);
-        if (DEBUG) std::cerr << "[DEBUG] INode # " << createdInodeNum << " at location " << (BLK_SIZE * (currentSegment + 1)) + overBufPos + 8*BLK_SIZE << std::endl;
+        createdInodeNum = currentIMap.addinode((BLK_SIZE * (currentSegment + 1)) + overBufPos/BLK_SIZE + 8);
+        if (DEBUG) std::cerr << "[DEBUG] INode # " << createdInodeNum << " at location " << (BLK_SIZE * (currentSegment + 1)) + overBufPos/BLK_SIZE + 8 << std::endl;
         overBufPos += BLK_SIZE;
     }
 

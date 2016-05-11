@@ -85,19 +85,19 @@ void proper_exit()
  */
 void cat_file(std::string& filename)
 {
-    // Get filenames and their respective inode numbers
-   /* auto diskFileMap = filemap.getFilemap();
+    /*// Get filenames and their respective inode numbers
+    auto diskFileMap = filemap.getFilemap();
     auto it = std::find_if(filemap.begin(), filemap.end(), [&name](const std::pair<std::string, int>& pair);
     if (it == filemap.end())
     {
         std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
-    }*/
+    }
 
-    /*// Inode number for filename
+    // Inode number for filename
     int inodeNum = it->second;
 
     int blockNum = 0;
-    for (int i = 0; i < IMAP_PIECE_COUNT; i++)find_if
+    for (int i = 0; i < IMAP_PIECE_COUNT; i++)
     {
         blockNum = listIMap[i].getBlockNumber(inodeNum);
         if (blockNum != -1)
@@ -105,7 +105,26 @@ void cat_file(std::string& filename)
             //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
             break;
         }
-    }*/
+    }
+
+    // Calculate inode location
+    int idx = ((int)(blockNum / BLK_SIZE)) + 1;
+
+    // Open segment file for reading inode information
+    std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
+    std::ifstream in(segmentFile, std::ifstream::binary);
+    if(!in.is_open())
+    {
+        std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
+        exit(1);
+    }
+
+    // Seek to inode information in segment file
+    in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32 + sizeof(int));
+    int filesize;
+    in.read((char*)&filesize, sizeof(filesize));
+    std::cout << currName << "\t\t" << filesize << " bytes" << std::endl;
+    in.close();*/
 }
 
 /**
@@ -166,9 +185,12 @@ void list_files()
             int filesize;
             in.read((char*)&filesize, sizeof(filesize));
             std::cout << currName << "\t\t" << filesize << " bytes" << std::endl;
+            
+            // Close file
+            in.close();
         }
     }
-
+    
     int filelistSize = filelist.size();
     for (int i = 0; i < filelistSize; i++)
     {
@@ -266,6 +288,9 @@ void import_file(std::string& originalName, std::string& lfsName)
     filemap.addFile(lfsName, createdInodeNum);
     filelist.push_back(std::make_pair(lfsName, size));
     if (DEBUG) std::cerr << "[DEBUG] Import Complete" << std::endl;
+
+    // Close file
+    ifs.close();
 }
 
 /**

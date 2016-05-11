@@ -96,104 +96,121 @@ void cat_file(std::string& filename, int numBytes, int startLoc)
     // Get filenames and their respective inode numbers
     auto diskFileMap = filemap.getFilemap();
 
-    // Ensure it's not a file being dealt in memory
+    // Check if file not in memory
     std::unordered_map<std::string, int>::const_iterator fileIt = diskFileMap.find(filename);
 
     if (fileIt == diskFileMap.end())
     {
+        //if (DEBUG) std::cerr << diskFileMap[filename].first << std::endl;
         std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
         return;
-    }
 
-    // Inode number for filename
-    int inodeNum = fileIt->second;
+        // Inode number for filename
+        /*if (DEBUG) std::cerr << "Found '" << filename << "' at iNode #" << inodeNum << std::endl;
 
-    int blockNum = 0;
-    for (int i = 0; i < IMAP_PIECE_COUNT; i++)
-    {
-        blockNum = listIMap[i].getBlockNumber(inodeNum);
-        if (blockNum != -1)
+        int blockNum = 0;
+        for (int i = 0; i < IMAP_PIECE_COUNT; i++)
         {
-            //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
-            break;
-        }
-    }
-
-    // Calculate inode location
-    int idx = ((int)(blockNum / BLK_SIZE)) + 1;
-
-    // Open segment file for reading inode information
-    std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
-    std::ifstream in(segmentFile, std::ifstream::binary);
-    if(!in.is_open())
-    {
-        std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
-        exit(1);
-    }
-
-    // Seek to inode information in segment file
-    in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32 + sizeof(int));
-    int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
-    int fileFound = false;
-    for (int i = 0; i < remainingSeek; i++)
-    {
-        int dataBlkNum = -1;
-        in.read((char*)&dataBlkNum, sizeof(dataBlkNum));
-        int savePos = in.tellg();
-        if (dataBlkNum == -1) break;
-        fileFound = true;
-        //if (DEBUG) std::cerr << "Data Block Number: " << (dataBlkNum % BLK_SIZE) * BLK_SIZE << std::endl;
-        char* textBuffer = new char[BLK_SIZE];
-        in.seekg((dataBlkNum % BLK_SIZE) * BLK_SIZE);
-        in.read(textBuffer, BLK_SIZE);
-        if (currentBlk > 0)
-        {
-            currentBlk--;
-        }
-        else
-        {
-            std::string s = "";
-
-            // Display portion of file
-            if (howMany != -1)
+            blockNum = listIMap[i].getBlockNumber(inodeNum);
+            if (blockNum != -1)
             {
-                for (int j = currentPos; j < BLK_SIZE; j++)
-                {
-                    // Force quit reading if we hit our threshold of number of bytes to read
-                    if (howMany <= 0)
-                    {
-                        remainingSeek = 0;
-                        break;
-                    }
-                    s += textBuffer[j];
-                    howMany--;
-                }
+                //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+                break;
             }
-            // Display whole file
+        }*/
+    }
+    else
+    {
+        // Inode number for filename
+        int inodeNum = fileIt->second;
+
+        int blockNum = 0;
+        for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+        {
+            blockNum = listIMap[i].getBlockNumber(inodeNum);
+            if (blockNum != -1)
+            {
+                //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+                break;
+            }
+        }
+
+        // Calculate inode location
+        int idx = ((int)(blockNum / BLK_SIZE)) + 1;
+
+        // Open segment file for reading inode information
+        std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
+        std::ifstream in(segmentFile, std::ifstream::binary);
+        if(!in.is_open())
+        {
+            std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
+            exit(1);
+        }
+
+        // Seek to inode information in segment file
+        in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32 + sizeof(int));
+        int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
+        int fileFound = false;
+        for (int i = 0; i < remainingSeek; i++)
+        {
+            int dataBlkNum = -1;
+            in.read((char*)&dataBlkNum, sizeof(dataBlkNum));
+            int savePos = in.tellg();
+            if (dataBlkNum == -1) break;
+            fileFound = true;
+            //if (DEBUG) std::cerr << "Data Block Number: " << (dataBlkNum % BLK_SIZE) * BLK_SIZE << std::endl;
+            char* textBuffer = new char[BLK_SIZE];
+            in.seekg((dataBlkNum % BLK_SIZE) * BLK_SIZE);
+            in.read(textBuffer, BLK_SIZE);
+            if (currentBlk > 0)
+            {
+                currentBlk--;
+            }
             else
             {
-                for (int j = currentPos; j < BLK_SIZE; j++)
+                std::string s = "";
+
+                // Display portion of file
+                if (howMany != -1)
                 {
-                    s += textBuffer[j];
+                    for (int j = currentPos; j < BLK_SIZE; j++)
+                    {
+                        // Force quit reading if we hit our threshold of number of bytes to read
+                        if (howMany <= 0)
+                        {
+                            remainingSeek = 0;
+                            break;
+                        }
+                        s += textBuffer[j];
+                        howMany--;
+                    }
                 }
+                // Display whole file
+                else
+                {
+                    for (int j = currentPos; j < BLK_SIZE; j++)
+                    {
+                        s += textBuffer[j];
+                    }
+                }
+
+                std::cout << s;
+                currentPos = 0;
             }
-
-            std::cout << s;
-            currentPos = 0;
+            delete[] textBuffer;
+            in.seekg(savePos);
         }
-        delete[] textBuffer;
-        in.seekg(savePos);
-    }
-    std::cout << std::endl;
+        std::cout << std::endl;
 
-    if (!fileFound)
-    {
-        std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+        if (!fileFound)
+        {
+            std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+            in.close();
+            return;
+        }
+        
         in.close();
-        return;
     }
-    
-    in.close();
 }
 
 /**
@@ -355,6 +372,7 @@ void import_file(std::string& originalName, std::string& lfsName)
 
     // Add file-inode association to filemap
     filemap.addFile(lfsName, createdInodeNum);
+    //if (DEBUG) std::cerr << "Added file '" << lfsName << "' at iNode #" << filemap.getinodeNumber(lfsName) << std::endl;
     filelist.push_back(std::make_pair(lfsName, size));
     if (DEBUG) std::cerr << "[DEBUG] Import Complete" << std::endl;
 

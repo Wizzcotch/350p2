@@ -22,7 +22,7 @@ class IMap
         ~IMap();
         int addinode(int blockNumber);
         void removeinode(int inode);
-        int getBlockNumber(int inodeNumber);
+        int getBlockNumber(int inodeNumber) { return blockNumbers[inodeNumber]; }
         int getMapPieceNumber() { return mapPieceNumber; }
         bool isFull() {return numInodes == 256;}
         void clear();

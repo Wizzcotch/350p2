@@ -33,6 +33,9 @@ IMap currentIMap(0);
 IMap* listIMap = new IMap[IMAP_PIECE_COUNT];
 bool bufferFull;
 
+// Flags
+bool completedOperations = false; // Changes were made
+
 // Filemap
 Filemap filemap("./DRIVE/FILEMAP");
 std::vector<std::pair<std::string, int> > filelist;
@@ -83,7 +86,7 @@ void proper_exit()
 void list_files()
 {
     // Get imap piece array
-    auto imapCR = chkptregion.getimapArray();
+    //auto imapCR = chkptregion.getimapArray();
 
     // Get filenames and their respective inode numbers
     auto diskFileMap = filemap.getFilemap();
@@ -93,8 +96,39 @@ void list_files()
     {
         std::string currName = it->first;   // Filename
         int inodeNum = it->second;          // Inode number for filename
+        //if (DEBUG) std::cerr << "Listing Block #: " << inodeNum << std::endl;
 
-        for (auto mapIt = imapCR.begin(); mapIt != imapCR.end(); ++mapIt)
+        int blockNum = 0;
+        for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+        {
+            blockNum = listIMap[i].getBlockNumber(inodeNum);
+            if (blockNum != -1)
+            {
+                //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+                break;
+            }
+        }
+
+        // Calculate inode location
+        int idx = ((int)(blockNum / BLK_SIZE)) + 1;
+
+        // Open segment file for reading inode information
+        std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
+        std::ifstream in(segmentFile, std::ifstream::binary);
+        if(!in.is_open())
+        {
+            std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
+            exit(1);
+        }
+
+        // Seek to inode information in segment file
+        in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32);
+        int filesize;
+        in.read((char*)&filesize, sizeof(filesize));
+        std::cout << currName << "\t\t" << filesize << " bytes" << std::endl;
+
+
+        /*for (auto mapIt = imapCR.begin(); mapIt != imapCR.end(); ++mapIt)
         {
             if (*mapIt != -1)
             {
@@ -108,7 +142,7 @@ void list_files()
                 }
             }
             std::cout << currName << "\t" << inodeNum << std::endl;
-        }
+        }*/
     }
 }
 
@@ -314,7 +348,14 @@ int main(int argc, char *argv[])
 
         if (tokens[0] == "exit" && tokens.size() == 1)
         {
-            proper_exit();
+            if (completedOperations) 
+            {
+                proper_exit();
+            }
+            else
+            {
+                exit(0);
+            }
         }
         else if (tokens[0] == "list" && tokens.size() == 1)
         {
@@ -322,6 +363,7 @@ int main(int argc, char *argv[])
         }
         else if (tokens[0] == "import" && tokens.size() == 3)
         {
+            completedOperations = true;
             std::string name = tokens[2];
             auto it = std::find_if(filelist.begin(), filelist.end(), [&name](const std::pair<std::string, int>& pair)
             {
@@ -411,6 +453,7 @@ int main(int argc, char *argv[])
         }
         else if (tokens[0] == "remove" && tokens.size() == 2)
         {
+            completedOperations = true;
             remove_file(tokens[1]);
         }
         else
@@ -422,7 +465,15 @@ int main(int argc, char *argv[])
     /**
      * Exit in case of CTRL+D or EOF.
      */
-    proper_exit();
+
+    if (completedOperations) 
+    {
+        proper_exit();
+    }
+    else
+    {
+        exit(0);
+    }
 
     return 0;
 }

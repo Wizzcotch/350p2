@@ -81,13 +81,38 @@ void proper_exit()
 }
 
 /**
+ * Cats the specified file.
+ */
+void cat_file(std::string& filename)
+{
+    // Get filenames and their respective inode numbers
+   /* auto diskFileMap = filemap.getFilemap();
+    auto it = std::find_if(filemap.begin(), filemap.end(), [&name](const std::pair<std::string, int>& pair);
+    if (it == filemap.end())
+    {
+        std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+    }*/
+
+    /*// Inode number for filename
+    int inodeNum = it->second;
+
+    int blockNum = 0;
+    for (int i = 0; i < IMAP_PIECE_COUNT; i++)find_if
+    {
+        blockNum = listIMap[i].getBlockNumber(inodeNum);
+        if (blockNum != -1)
+        {
+            //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+            break;
+        }
+    }*/
+}
+
+/**
  * Lists the files in the LFS.
  */
 void list_files()
 {
-    // Get imap piece array
-    //auto imapCR = chkptregion.getimapArray();
-
     // Get filenames and their respective inode numbers
     auto diskFileMap = filemap.getFilemap();
 
@@ -95,54 +120,59 @@ void list_files()
     for (auto it = diskFileMap.begin(); it != diskFileMap.end(); ++it)
     {
         std::string currName = it->first;   // Filename
-        int inodeNum = it->second;          // Inode number for filename
-        //if (DEBUG) std::cerr << "Listing Block #: " << inodeNum << std::endl;
 
-        int blockNum = 0;
-        for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+        // Ensure it's not a file being dealt in memory
+        int filelistSize = filelist.size();
+        bool fileFound = false;
+        for (int i = 0; i < filelistSize; i++)
         {
-            blockNum = listIMap[i].getBlockNumber(inodeNum);
-            if (blockNum != -1)
+            if (filelist[i].first.compare(currName) == 0)
             {
-                //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+                fileFound = true;
                 break;
             }
         }
 
-        // Calculate inode location
-        int idx = ((int)(blockNum / BLK_SIZE)) + 1;
-
-        // Open segment file for reading inode information
-        std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
-        std::ifstream in(segmentFile, std::ifstream::binary);
-        if(!in.is_open())
+        if (!fileFound)
         {
-            std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
-            exit(1);
-        }
+            int inodeNum = it->second;  // Inode number for filename
+            //if (DEBUG) std::cerr << "Listing Block #: " << inodeNum << std::endl;
 
-        // Seek to inode information in segment file
-        in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32);
-        int filesize;
-        in.read((char*)&filesize, sizeof(filesize));
-        std::cout << currName << "\t\t" << filesize << " bytes" << std::endl;
-
-
-        /*for (auto mapIt = imapCR.begin(); mapIt != imapCR.end(); ++mapIt)
-        {
-            if (*mapIt != -1)
+            int blockNum = 0;
+            for (int i = 0; i < IMAP_PIECE_COUNT; i++)
             {
-                int idx = ((int)(*mapIt / BLK_SIZE)) + 1;
-                std::ifstream in("./DRIVE/SEGMENT" + std::to_string(idx));
-                in.seekg(*mapIt * BLK_SIZE);
-                int blockNum = 0;
-                for (int i = 0; i < 40; i++)
+                blockNum = listIMap[i].getBlockNumber(inodeNum);
+                if (blockNum != -1)
                 {
-                    in.read((char*)&blockNum, sizeof(blockNum));
+                    //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+                    break;
                 }
             }
-            std::cout << currName << "\t" << inodeNum << std::endl;
-        }*/
+
+            // Calculate inode location
+            int idx = ((int)(blockNum / BLK_SIZE)) + 1;
+
+            // Open segment file for reading inode information
+            std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
+            std::ifstream in(segmentFile, std::ifstream::binary);
+            if(!in.is_open())
+            {
+                std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
+                exit(1);
+            }
+
+            // Seek to inode information in segment file
+            in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32);
+            int filesize;
+            in.read((char*)&filesize, sizeof(filesize));
+            std::cout << currName << "\t\t" << filesize << " bytes" << std::endl;
+        }
+    }
+
+    int filelistSize = filelist.size();
+    for (int i = 0; i < filelistSize; i++)
+    {
+        std::cout << filelist[i].first << "\t\t" << filelist[i].second << " bytes" << std::endl;
     }
 }
 
@@ -360,6 +390,10 @@ int main(int argc, char *argv[])
         else if (tokens[0] == "list" && tokens.size() == 1)
         {
             list_files();
+        }
+        else if (tokens[0] == "cat" && tokens.size() == 2)
+        {
+            cat_file(tokens[1]);
         }
         else if (tokens[0] == "import" && tokens.size() == 3)
         {

@@ -188,7 +188,7 @@ void import_file(std::string& originalName, std::string& lfsName)
         if(logBufferPos < SEGMENT_SIZE)
         {
             // Absolute position in memory
-            inodeObj.addDataPointer((BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE));
+            inodeObj.addDataPointer((BLK_SIZE * currentSegment) + logBufferPos/BLK_SIZE);
 
             for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
             {
@@ -201,8 +201,8 @@ void import_file(std::string& originalName, std::string& lfsName)
         {
             if(!bufferFull) bufferFull = true;
             /* Did not check if currentSegment exceeds 32 */
-            inodeObj.addDataPointer((BLK_SIZE * (currentSegment + 1)) + overBufPos + 8*BLK_SIZE);
-            for (int offset = 0; offset < BLK_SIZE && overBufPos + bufferPos + offset < size; offset++)
+            inodeObj.addDataPointer((BLK_SIZE * (currentSegment + 1)) + overBufPos/BLK_SIZE + 8);
+            for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
             {
                 overflowBuffer[overBufPos + offset] = buffer[bufferPos + offset];
             }
@@ -228,13 +228,6 @@ void import_file(std::string& originalName, std::string& lfsName)
         createdInodeNum = currentIMap.addinode((BLK_SIZE * (currentSegment + 1)) + overBufPos + 8*BLK_SIZE);
         if (DEBUG) std::cerr << "[DEBUG] INode # " << createdInodeNum << " at location " << (BLK_SIZE * (currentSegment + 1)) + overBufPos + 8*BLK_SIZE << std::endl;
         overBufPos += BLK_SIZE;
-    }
-
-    if (DEBUG)
-    {
-        //std::cerr << "[DEBUG] Created INode" << std::endl;
-        inodeObj.printValues();
-        std::cerr << "Contents of string: " << inodeStr << std::endl;
     }
 
     delete inodeStr;
@@ -348,7 +341,7 @@ int main(int argc, char *argv[])
 
         if (tokens[0] == "exit" && tokens.size() == 1)
         {
-            if (completedOperations) 
+            if (completedOperations)
             {
                 proper_exit();
             }
@@ -387,7 +380,7 @@ int main(int argc, char *argv[])
                         delete imapStr;
                         currentIMap.clear();
                         chkptregion.addimap((BLK_SIZE * (currentSegment+1)) +
-                                overBufPos + 8);
+                                overBufPos/BLK_SIZE + 8);
                         if(DEBUG) std::cerr << "[DEBUG] imap is full, writing to buffer" << std::endl;
                     }
 
@@ -406,7 +399,7 @@ int main(int argc, char *argv[])
                     if(DEBUG)
                     {
                         std::cerr << "[DEBUG] Buffer is full, writing to segment" << std::endl;
-                        std::cerr << "[DEBUG] overBufPos: " << overBufPos << std::endl;
+                        std::cerr << "[DEBUG] overBufPos: " << overBufPos/BLK_SIZE << std::endl;
                     }
 
                     //Put overflowBuffer in logBuffer
@@ -442,8 +435,7 @@ int main(int argc, char *argv[])
 
                     // Ready imap object for next imap
                     currentIMap.clear();
-                    chkptregion.addimap((BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE));
-
+                    chkptregion.addimap((BLK_SIZE * currentSegment) + logBufferPos/BLK_SIZE);
                     delete imapStr;
 
                     if(DEBUG) std::cerr << "[DEBUG] imap is full, writing to buffer" << std::endl;
@@ -466,7 +458,7 @@ int main(int argc, char *argv[])
      * Exit in case of CTRL+D or EOF.
      */
 
-    if (completedOperations) 
+    if (completedOperations)
     {
         proper_exit();
     }

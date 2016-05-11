@@ -81,7 +81,7 @@ void proper_exit()
 }
 
 /**
- * Cats the specified file or displays a certain number of bytes.
+ * Overwrites a specified section of the LFS file's contents.
  */
 void overwrite_file(std::string& filename, int numBytes, int startLoc, std::string& character)
 {

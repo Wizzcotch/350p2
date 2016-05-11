@@ -128,9 +128,7 @@ void cat_file(std::string& filename, int numBytes, int startLoc)
     if(blockNum == -1)
     {
         blockNum = currentIMap.getBlockNumber(inodeNum);
-        if(DEBUG && blockNum != -1)
-            std::cerr << "Block number found in currentIMap: " << blockNum
-                << std::endl;
+        //if(DEBUG && blockNum != -1) std::cerr << "Block number found in currentIMap: " << blockNum << std::endl;
     }
 
     // Calculate inode location (i.e. segment)
@@ -149,12 +147,12 @@ void cat_file(std::string& filename, int numBytes, int startLoc)
     {
         memcpy(&inodeBuffer, &logBuffer[(blockNum % BLK_SIZE) * BLK_SIZE], BLK_SIZE);
         memcpy((char*)&remainingSeek, &inodeBuffer[32], sizeof(int));
-        if(DEBUG)
+        /*if(DEBUG)
         {
             std::cerr << "blockNum: " << blockNum << std::endl;
             std::cerr << "remainingSeek: " << remainingSeek << std::endl;
             std::cerr << "INode location at: " << blockNum % BLK_SIZE << std::endl;
-        }
+        }*/
         inodeInBuffer = true;
     }
     else
@@ -175,22 +173,19 @@ void cat_file(std::string& filename, int numBytes, int startLoc)
 
         // Read filesize
         in.read((char*)&remainingSeek, sizeof(remainingSeek));
-        if(DEBUG)
-        {
-            std::cerr << "[DEBUG](main-cat) Filesize: " <<  remainingSeek << std::endl;
-        }
+        //if(DEBUG) std::cerr << "[DEBUG](main-cat) Filesize: " <<  remainingSeek << std::endl;
 
     }
 
     //int filesize = remainingSeek; //Filesize in bytes
     remainingSeek = (remainingSeek % BLK_SIZE == 0) ? remainingSeek / BLK_SIZE : remainingSeek / BLK_SIZE + 1;
 
-    if(DEBUG)
-    {
-        std::cerr << "[DEBUG](main-cat) Filesize in blocks: " << remainingSeek << std::endl;
-    }
+    //if(DEBUG) std::cerr << "[DEBUG](main-cat) Filesize in blocks: " << remainingSeek << std::endl;
 
-    if(remainingSeek > 0) dataPointers = new int[remainingSeek];
+    if(remainingSeek > 0)
+    {
+        dataPointers = new int[remainingSeek];
+    }
     else
     {
         std::cout << "[ERROR] Invalid filesize" << std::endl;
@@ -218,12 +213,12 @@ void cat_file(std::string& filename, int numBytes, int startLoc)
     {
         //int dataPointers[i] = -1;
         //in.read((char*)&dataPointers[i], sizeof(dataPointers[i]));
-        if(DEBUG)
+        /*if(DEBUG)
         {
             std::cerr << "[DEBUG] dataPointers[i]: " << dataPointers[i] << std::endl;
             std::cerr << "catSegment: " << catSegment << std::endl;
             std::cerr << "fetching segment: " << dataPointers[i] / BLK_SIZE + 1 << std::endl;
-        }
+        }*/
 
         int savePos = in.tellg();
         if (dataPointers[i] == -1) break;
@@ -237,12 +232,12 @@ void cat_file(std::string& filename, int numBytes, int startLoc)
         }
         /* ===== Start here for overflow ===== */
         else if((dataPointers[i] / BLK_SIZE) + 1 != catSegment) {
-            if (DEBUG)
+            /*if (DEBUG)
             {
                 std::cerr << "[DEBUG] Data in different place" << std::endl;
                 std::cerr << "catSegment: " << catSegment << std::endl;
                 std::cerr << "fetching segment: " << dataPointers[i] / BLK_SIZE + 1 << std::endl;
-            }
+            }*/
 
             // Load up the new segment and continue
             if(segmentFileOpen) in.close();

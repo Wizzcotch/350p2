@@ -83,6 +83,20 @@ void proper_exit()
 /**
  * Cats the specified file or displays a certain number of bytes.
  */
+void overwrite_file(std::string& filename, int numBytes, int startLoc, std::string& character)
+{
+    if (character.length() != 1)
+    {
+        std::cout << "[ERROR] Overwrite command expects single character" << std::endl;
+        return;
+    }
+    char c = character.at(0);
+    if (DEBUG) std::cerr << "Overwriting with '" << c << "'" << std::endl;
+}
+
+/**
+ * Cats the specified file or displays a certain number of bytes.
+ */
 void cat_file(std::string& filename, int numBytes, int startLoc)
 {
     int currentBlk = 0, currentPos = 0, howMany = -1;
@@ -298,7 +312,7 @@ void import_file(std::string& originalName, std::string& lfsName)
     }
     else if(lfsName.size() > 32)
     {
-        std::cerr << "[ERROR] File name '" << lfsName << "' too long" << std::endl;
+        std::cout << "[ERROR] File name '" << lfsName << "' too long" << std::endl;
     }
 
     // Get file size
@@ -314,7 +328,7 @@ void import_file(std::string& originalName, std::string& lfsName)
     INode inodeObj(lfsName);
     if(size / BLK_SIZE > 128 || (size / BLK_SIZE == 128 && size % BLK_SIZE > 0))
     {
-        std::cerr << "[ERROR] File '" << originalName << "' too big." << std::endl;
+        std::cout << "[ERROR] File '" << originalName << "' too big." << std::endl;
         //std::cerr << "Filesize: " << size / BLK_SIZE << std::endl;
         return;
     }
@@ -392,7 +406,7 @@ void remove_file(std::string& filename)
     });
     if (it == filelist.end())
     {
-        std::cerr << "[ERROR] File < " << filename << " > not found (does it exist?)" << std::endl;
+        std::cout << "[ERROR] File < " << filename << " > not found (does it exist?)" << std::endl;
     }
     else
     {
@@ -503,6 +517,10 @@ int main(int argc, char *argv[])
         else if (tokens[0] == "display" && tokens.size() == 4)
         {
             cat_file(tokens[1], std::stoi(tokens[2]), std::stoi(tokens[3]));
+        }
+        else if (tokens[0] == "overwrite" && tokens.size() == 5)
+        {
+            overwrite_file(tokens[1], std::stoi(tokens[2]), std::stoi(tokens[3]), tokens[4]);
         }
         else if (tokens[0] == "import" && tokens.size() == 3)
         {

@@ -81,20 +81,32 @@ void proper_exit()
 }
 
 /**
- * Cats the specified file.
+ * Cats the specified file or displays a certain number of bytes.
  */
-void cat_file(std::string& filename)
+void cat_file(std::string& filename, int numBytes, int startLoc)
 {
-    /*// Get filenames and their respective inode numbers
+    int currentBlk = 0, currentPos = 0, howMany = -1;
+    if (numBytes > -1) howMany = numBytes;
+    if (startLoc > -1)
+    {
+        currentBlk = ((int)(startLoc / BLK_SIZE));
+        currentPos = startLoc % BLK_SIZE;
+    }
+
+    // Get filenames and their respective inode numbers
     auto diskFileMap = filemap.getFilemap();
-    auto it = std::find_if(filemap.begin(), filemap.end(), [&name](const std::pair<std::string, int>& pair);
-    if (it == filemap.end())
+
+    // Ensure it's not a file being dealt in memory
+    std::unordered_map<std::string, int>::const_iterator fileIt = diskFileMap.find(filename);
+
+    if (fileIt == diskFileMap.end())
     {
         std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+        return;
     }
 
     // Inode number for filename
-    int inodeNum = it->second;
+    int inodeNum = fileIt->second;
 
     int blockNum = 0;
     for (int i = 0; i < IMAP_PIECE_COUNT; i++)
@@ -121,10 +133,67 @@ void cat_file(std::string& filename)
 
     // Seek to inode information in segment file
     in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32 + sizeof(int));
-    int filesize;
-    in.read((char*)&filesize, sizeof(filesize));
-    std::cout << currName << "\t\t" << filesize << " bytes" << std::endl;
-    in.close();*/
+    int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
+    int fileFound = false;
+    for (int i = 0; i < remainingSeek; i++)
+    {
+        int dataBlkNum = -1;
+        in.read((char*)&dataBlkNum, sizeof(dataBlkNum));
+        int savePos = in.tellg();
+        if (dataBlkNum == -1) break;
+        fileFound = true;
+        //if (DEBUG) std::cerr << "Data Block Number: " << (dataBlkNum % BLK_SIZE) * BLK_SIZE << std::endl;
+        char* textBuffer = new char[BLK_SIZE];
+        in.seekg((dataBlkNum % BLK_SIZE) * BLK_SIZE);
+        in.read(textBuffer, BLK_SIZE);
+        if (currentBlk > 0)
+        {
+            currentBlk--;
+        }
+        else
+        {
+            std::string s = "";
+
+            // Display portion of file
+            if (howMany != -1)
+            {
+                for (int j = currentPos; j < BLK_SIZE; j++)
+                {
+                    // Force quit reading if we hit our threshold of number of bytes to read
+                    if (howMany <= 0)
+                    {
+                        remainingSeek = 0;
+                        break;
+                    }
+                    s += textBuffer[j];
+                    howMany--;
+                }
+            }
+            // Display whole file
+            else
+            {
+                for (int j = currentPos; j < BLK_SIZE; j++)
+                {
+                    s += textBuffer[j];
+                }
+            }
+
+            std::cout << s;
+            currentPos = 0;
+        }
+        delete[] textBuffer;
+        in.seekg(savePos);
+    }
+    std::cout << std::endl;
+
+    if (!fileFound)
+    {
+        std::cerr << "[ERROR] File '" << filename << "' not found." << std::endl;
+        in.close();
+        return;
+    }
+    
+    in.close();
 }
 
 /**
@@ -241,7 +310,7 @@ void import_file(std::string& originalName, std::string& lfsName)
         {
             // Absolute position in memory
             inodeObj.addDataPointer((BLK_SIZE * currentSegment) + logBufferPos/BLK_SIZE);
-
+            //if (DEBUG) std::cerr << (BLK_SIZE * currentSegment) + logBufferPos/BLK_SIZE << std::endl;
             for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
             {
                 logBuffer[logBufferPos + offset] = buffer[bufferPos + offset];
@@ -411,7 +480,11 @@ int main(int argc, char *argv[])
         }
         else if (tokens[0] == "cat" && tokens.size() == 2)
         {
-            cat_file(tokens[1]);
+            cat_file(tokens[1], -1, -1);
+        }
+        else if (tokens[0] == "display" && tokens.size() == 4)
+        {
+            cat_file(tokens[1], std::stoi(tokens[2]), std::stoi(tokens[3]));
         }
         else if (tokens[0] == "import" && tokens.size() == 3)
         {

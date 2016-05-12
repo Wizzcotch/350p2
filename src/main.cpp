@@ -1035,7 +1035,11 @@ void remove_file(std::string lfs_name){
  */
 void clean_lfs(int numSegments)
 {
-
+    if (numSegments < 1 || numSegments > 32)
+    {
+        std::cout << "[ERROR] Number of segments out of range" << std::endl;
+        return;
+    }
 }
 
 int main(int argc, char *argv[])

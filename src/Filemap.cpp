@@ -38,7 +38,7 @@ Filemap::~Filemap()
     {
         for(auto iter = filemap.begin(); iter != filemap.end(); ++iter)
         {
-            std::cerr << "File > " << iter->first << ": " << iter->second << std::endl;
+            //std::cerr << "File > " << iter->first << ": " << iter->second << std::endl;
             ofs << iter->first << " " << std::to_string(iter->second) << std::endl;
         }
         ofs.close();

@@ -18,7 +18,7 @@ ChkptRegion::ChkptRegion(std::string filename): filename(filename)
     {
         ifs.read((char*)&blockNum, sizeof(blockNum));
         imap[i] = blockNum;
-        if (blockNum != 0) std::cerr << "Checkpoint region read in block number: " << blockNum << std::endl;
+        //if (blockNum != 0) std::cerr << "Checkpoint region read in block number: " << blockNum << std::endl;
     }
 
     // Close file for reading
@@ -59,7 +59,7 @@ ChkptRegion::~ChkptRegion()
 
     for (int i = 0; i < 40; i++)
     {
-        std::cerr << "Wrote imap at: " << imap[i] << std::endl;
+        //std::cerr << "Wrote imap at: " << imap[i] << std::endl;
         ofs.write(reinterpret_cast<const char *>(&imap[i]), sizeof(int));
     }
 

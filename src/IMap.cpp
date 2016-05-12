@@ -28,7 +28,7 @@ IMap::~IMap() {}
 void IMap::setUpImap(std::pair<int, int> blockInfo, bool checkFull)
 {
     int blockNum = blockInfo.first;
-    if (!checkFull) std::cerr << "Block #: " << blockNum << std::endl;
+    //if (!checkFull) std::cerr << "Block #: " << blockNum << std::endl;
 
     // First time run, so previous imap does not exist
     if (blockNum <= 0)
@@ -42,7 +42,7 @@ void IMap::setUpImap(std::pair<int, int> blockInfo, bool checkFull)
     int segmentNum = blockNum / 1024;
     std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(segmentNum + 1);
 
-    if (!checkFull) std::cerr << "Fetching imap at segment #: " << segmentNum + 1 << std::endl;
+    //if (!checkFull) std::cerr << "Fetching imap at segment #: " << segmentNum + 1 << std::endl;
 
     std::ifstream ifs(segmentFile, std::ifstream::binary);
     if(!ifs.is_open())
@@ -62,7 +62,7 @@ void IMap::setUpImap(std::pair<int, int> blockInfo, bool checkFull)
         if (inodeNum > 0)
         {
             addinode(inodeNum);
-            if (!checkFull) std::cerr << "Read in inode location: " << inodeNum << std::endl;
+            //if (!checkFull) std::cerr << "Read in inode location: " << inodeNum << std::endl;
         }
     }
     ifs.close();

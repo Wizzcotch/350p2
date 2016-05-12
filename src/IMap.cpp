@@ -110,6 +110,10 @@ int IMap::setinode(int blockNumber, int oldNum)
     return inodeNumber + (mapPieceNumber) * 1024;
 }
 
+int IMap::getNextINodeNumber(){
+  return nextAvailinode + mapPieceNumber * 1024;
+}
+
 void IMap::removeinode(int inode)
 {
     if(inode < nextAvailinode) nextAvailinode = inode;

@@ -37,3 +37,4 @@ build/*
 program2
 *.txt
 *.swp
+*~

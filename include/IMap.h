@@ -25,6 +25,7 @@ class IMap
         void removeinode(int inode);
         int getBlockNumber(int inodeNumber) { return blockNumbers[inodeNumber]; }
         int getMapPieceNumber() { return mapPieceNumber; }
+	    int getNextINodeNumber();
         bool isFull() {return numInodes == 256;}
         void clear();
         char* convertToString();

@@ -1,6 +1,4 @@
 #include <algorithm>
-#include <fstream>
-#include <iostream>
 #include <sstream>
 #include <stdio.h>
 #include <string>
@@ -1035,11 +1033,61 @@ void remove_file(std::string lfs_name){
  */
 void clean_lfs(int numSegments)
 {
-    if (numSegments < 1 || numSegments > 32)
+  SegmentSummary newSummary;
+  std::fstream f;
+  if (numSegments < 1 || numSegments > 32)
     {
-        std::cout << "[ERROR] Number of segments out of range" << std::endl;
-        return;
+      std::cout << "[ERROR] Number of segments out of range" << std::endl;
+      return;
     }
+  char * cleanBuffer = new char[SEGMENT_SIZE];
+  bool bufferFull = false;
+  int segmentToBeWrittenTo = chkptregion.getNextFreeSeg();
+  int bufPos = 8*BLK_SIZE;
+  for(int i = 0; i < 32; i++){
+    std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(i);
+    f.open(segmentFile,std::fstream::in | std::fstream::out | std::fstream::binary);
+    for(int j = 0; j < 1016;j++){
+      int blockType, blockNumber;
+      f.read((char*)&blockType, sizeof(int));
+      f.read((char*)&blockNumber, sizeof(int));
+      if(blockType == -1){
+	// block is an inode
+	for(int k = 0; k < IMAP_PIECE_COUNT; k++){
+		
+	  if(listIMap[k].getBlockNumber() 
+	newSummary.sumBlock.dataBlockInfo[j].inode = blockType;
+	newSummary.sumBlock.dataBlockInfo[j].block = blockNumber;
+	
+	// move blocks into buffer
+      }
+      else if(blockType == -2){
+	// block is an imap
+	if((chkptregion.setIMapLocation(blockNumber,(bufPos/1024) + (1024*i))){
+	    
+	    newSummary.sumBlock.dataBlockInfo[j].inode = blockType;
+	    newSummary.sumBlock.dataBlockInfo[j].block = (bufPos/1024);
+	    
+	  }
+	  
+	// move blocks into buffer
+      }
+
+      else if(blockType >= 0){
+	//block is a data block
+
+	newSummary.sumBlock.dataBlockInfo[j].inode = blockType;
+	newSummary.sumBlock.dataBlockInfo[j].block = blockNumber;
+	
+	// move blocks into buffer
+      }
+
+    }
+    // kill the segment
+    chkptregion.markSegment(i,false);
+  }
+  
+	
 }
 
 int main(int argc, char *argv[])

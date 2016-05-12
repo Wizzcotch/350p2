@@ -107,3 +107,13 @@ std::pair<int, int> ChkptRegion::getLastImapPieceLoc()
     }
     return std::make_pair(lastLoc, idx);
 }
+
+bool ChkptRegion::setIMapLocation(int oldBlockNumber,int newBlockNumber){
+  for(int i = 0; i < 40; i++){
+    if(imap[i] == oldBlockNumber){
+      imap[i] = newBlockNumber;
+      return true;
+    }
+  }
+  return false;
+}

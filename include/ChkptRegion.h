@@ -26,6 +26,7 @@ class ChkptRegion
         void markSegment(int segment, bool state);
         std::array<int, 40> getimapArray() { return imap; }
         std::pair<int, int> getLastImapPieceLoc();
+	bool setIMapLocation(int oldBlockNumber, int newBlockNumber);
 };
 
 #endif

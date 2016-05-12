@@ -13,6 +13,7 @@
 #include "ChkptRegion.h"
 #include "IMap.h"
 #include "INode.h"
+#include "SegmentSummary.h"
 
 #define BLK_SIZE 1024
 #define MAX_FILE_NUM 10000
@@ -32,6 +33,7 @@ int currentSegment;
 IMap currentIMap(0);
 IMap* listIMap = new IMap[IMAP_PIECE_COUNT];
 bool bufferFull;
+SegmentSummary curSegmentSummary;
 
 // Flags
 bool completedOperations = false; // Changes were made
@@ -49,10 +51,15 @@ ChkptRegion chkptregion("./DRIVE/CHECKPOINT_REGION");
 void proper_exit()
 {
     char* imapStr = currentIMap.convertToString();
+    char* ssString = curSegmentSummary.toString();
+    memcpy(&logBuffer[0],
+            ssString,
+            8*BLK_SIZE);
     memcpy(&logBuffer[logBufferPos],
             imapStr,
             BLK_SIZE);
     delete imapStr;
+    delete ssString;
     currentIMap.clear();
     chkptregion.addimap((BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE));
     if (DEBUG) std::cerr << "Imap located at: " << (BLK_SIZE * currentSegment) + (logBufferPos/BLK_SIZE) << std::endl;
@@ -114,7 +121,7 @@ void cat_file(std::string& filename, int numBytes, int startLoc)
     // Inode number for filename
     int inodeNum = fileIt->second;
 
-    int blockNum = 0;
+    int blockNum = -1;
     for (int i = 0; i < IMAP_PIECE_COUNT; i++)
     {
         blockNum = listIMap[i].getBlockNumber(inodeNum);
@@ -427,10 +434,12 @@ void import_file(std::string& originalName, std::string& lfsName)
             for (int offset = 0; offset < BLK_SIZE && bufferPos + offset < size; offset++)
             {
                 logBuffer[logBufferPos + offset] = buffer[bufferPos + offset];
-            }
-
+	    }
+	    curSegmentSummary.UpdateBlockInfo(logBufferPos/BLK_SIZE, currentIMap.getNextINodeNumber()); 
             logBufferPos += BLK_SIZE;
-        }
+						  
+	}
+	
         else
         {
             if(!bufferFull)
@@ -478,50 +487,6 @@ void import_file(std::string& originalName, std::string& lfsName)
 
     // Close file
     ifs.close();
-}
-
-/**
- * Remove specified file from LFS.
- */
-void remove_file(std::string& filename)
-{
-    std::string name = filename;
-    auto it = std::find_if(filelist.begin(), filelist.end(), [&name](const std::pair<std::string, int>& pair)
-    {
-        return pair.first == name;
-    });
-    if (it == filelist.end())
-    {
-        std::cout << "[ERROR] File < " << filename << " > not found (does it exist?)" << std::endl;
-    }
-    else
-    {
-        it = filelist.erase(it);
-        filemap.removeFile(filename);
-    }
-
-    //IMap *map;
-
-    //if (cRegion.empty())
-    //{
-        //std::cerr << "[ERROR] No files found" << std::endl;
-    //}
-    //// If INode at location has the specified filename, clear its reference in the IMap
-    //int crSize = cRegion.size();
-    //for (int i = 0; i < crSize; i++)
-    //{
-        //map = &cRegion[i];
-        //int mapSize = map->inodeList.size();
-        //for (int j = 0; j < mapSize; j++)
-        //{
-            //if (inodes[j].filename == filename)
-            //{
-                //map->inodeList.erase(map->inodeList.begin() + j);
-                //if (DEBUG) std::cerr << "[DEBUG] Successfully removed < " << filename << " >" << std::endl;
-                //return;
-            //}
-        //}
-    //}
 }
 
 /**
@@ -661,9 +626,183 @@ void overwrite_file(std::string& filename, int numBytes, int startLoc, std::stri
     }
 }
 
+void remove_file(std::string lfs_name){
+  auto diskFileMap = filemap.getFilemap();
+  std::unordered_map<std::string, int>::const_iterator fileIt = diskFileMap.find(lfs_name);
+  
+  if(fileIt == diskFileMap.end()){
+    std::cerr << "[ERROR] File '" << lfs_name << "' not found." << std::endl;
+    return;
+  }
+  // Inode number for lfs_name
+  int inodeNum = fileIt->second;
+  
+  // Remove lfs_name from filemap
+  filemap.removeFile(lfs_name);
+
+  for(auto iter = filelist.begin(); iter != filelist.end(); ++iter) {
+    if((*iter).first == lfs_name) 
+      {
+	filelist.erase(iter);
+	break;
+      }
+  }
+
+
+  
+  int blockNum = -1;
+  for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+    {
+      blockNum = listIMap[i].getBlockNumber(inodeNum);
+      if (blockNum != -1)
+        {
+	  //if (DEBUG) std::cerr << "INode Location: " << blockNum << std::endl;
+	  listIMap[i].removeinode(inodeNum);
+	  break;
+        }
+    }
+  // Find inode entry in imap piece buffer
+  if(blockNum == -1)
+    {
+      blockNum = currentIMap.getBlockNumber(inodeNum);
+      currentIMap.removeinode(inodeNum);
+      //if(DEBUG && blockNum != -1) std::cerr << "Block number found in currentIMap: " << blockNum << std::endl;
+    }
+  // Calculate inode location (i.e. segment)
+  int idx = ((int)(blockNum / BLK_SIZE)) + 1;
+  
+  // Important variables
+  int* dataPointers; //Array of data block pointers 
+  int remainingSeek = -1; //Remaining blocks to seek
+  std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
+  std::ifstream in;
+  std::fstream f;
+  char inodeBuffer[BLK_SIZE];
+  bool inodeInBuffer = false, segmentFileOpen = false;
+  
+  int relevantSegments[32];
+  for(int i = 0; i < 32; i++){
+    relevantSegments[i] = -1;
+  }
+  int numRelevantSegments = 0;
+  // Check if in memory or stored in segment
+  if(idx-1 == currentSegment)
+    {
+      memcpy(&inodeBuffer, &logBuffer[(blockNum % BLK_SIZE) * BLK_SIZE], BLK_SIZE);
+      memcpy((char*)&remainingSeek, &inodeBuffer[32], sizeof(int));
+      /*if(DEBUG)
+        {
+	std::cerr << "blockNum: " << blockNum << std::endl;
+	std::cerr << "remainingSeek: " << remainingSeek << std::endl;
+	std::cerr << "INode location at: " << blockNum % BLK_SIZE << std::endl;
+        }*/
+      inodeInBuffer = true;
+    }
+  else
+    {
+      // Open segment file for reading inode information
+      in.open(segmentFile, std::ifstream::binary);
+      if(!in.is_open())
+        {
+	  std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
+	  return;
+        }
+      
+      segmentFileOpen = true;
+      // Seek to inode information in segment file
+      //in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32 + sizeof(int));
+      //int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
+      in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32);
+      
+      // Read filesize
+      in.read((char*)&remainingSeek, sizeof(remainingSeek));
+      //if(DEBUG) std::cerr << "[DEBUG](main-cat) Filesize: " <<  remainingSeek << std::endl;
+      
+    }
+  
+  //int filesize = remainingSeek; //Filesize in bytes
+  remainingSeek = (remainingSeek % BLK_SIZE == 0) ? remainingSeek / BLK_SIZE : remainingSeek / BLK_SIZE + 1;
+  
+  //if(DEBUG) std::cerr << "[DEBUG](main-cat) Filesize in blocks: " << remainingSeek << std::endl;
+  
+  if(remainingSeek > 0)
+      {
+	dataPointers = new int[remainingSeek];
+      }
+  else
+    {
+      std::cout << "[ERROR] Invalid filesize" << std::endl;
+      return;
+    }
+  
+  if(!dataPointers)
+    {
+      std::cout << "[ERROR] Problem allocating memory in cat_file()" << std::endl;
+      return;
+    }
+  
+  for (int i = 0; i < remainingSeek; i++)
+    {
+      dataPointers[i] = -1;
+      if(!inodeInBuffer) in.read((char*)&dataPointers[i], sizeof(int));
+      else memcpy((char*)&dataPointers[i], &inodeBuffer[32 + (i+1) * sizeof(int)], sizeof(int));
+    }
+  in.close();
+  
+  int needsToChange = 1;
+  for(int i = 0; i < remainingSeek; i++){
+    for(int j = 0; j < numRelevantSegments; j++){
+      if((dataPointers[i] / BLK_SIZE) == relevantSegments[j]){
+	needsToChange = 0;
+	break;
+      }
+    }
+    if(needsToChange == 1){
+      relevantSegments[numRelevantSegments] = (dataPointers[i]/BLK_SIZE);
+      numRelevantSegments++;
+    }
+    
+  }
+  
+  for(int i = 0; i < numRelevantSegments; i++){
+    if(relevantSegments[i] == currentSegment){
+      for(int j = 0; j < 1016; j++){
+	if(curSegmentSummary.sumBlock.dataBlockInfo[j].inode == inodeNum){
+	  curSegmentSummary.sumBlock.dataBlockInfo[j].inode = -3;
+	}
+      }
+    }
+    else{
+      segmentFile = "./DRIVE/SEGMENT" + std::to_string(relevantSegments[i] + 1);
+      f.open(segmentFile,std::fstream::in | std::fstream::out | std::fstream::binary);
+      if(!f.is_open()){
+	std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
+	return;
+      }
+      for(int j = 0; j < 1016; j++){
+	int blockType, blockNumber;
+	f.read((char*)&blockType, sizeof(int));
+	f.read((char*)&blockNumber, sizeof(int));
+	if(blockType == inodeNum){
+	  if(DEBUG) {
+	    std::cerr << "[DEBUG] inode: " << blockType << std::endl;
+	    std::cerr << "[DEBUG] blkNum: " << blockNumber << std::endl;
+	  blockType = -3;
+	  f.seekg((sizeof(int) * 2 * j));
+	  f.write(reinterpret_cast<const char *>(&blockType), sizeof(int));
+	  f.seekg((sizeof(int)));
+	  }
+	}
+      }
+    }
+  }
+  f.close();
+}
+
+
 int main(int argc, char *argv[])
 {
-    currentSegment = chkptregion.getNextFreeSeg();
+  currentSegment = chkptregion.getNextFreeSeg();
     if (DEBUG) std::cerr << "Current segment file: ./DRIVE/SEGMENT" << currentSegment + 1<< std::endl;
 
     // Grab contents of current segment
@@ -774,7 +913,11 @@ int main(int argc, char *argv[])
                                 overBufPos/BLK_SIZE + 8);
                         if(DEBUG) std::cerr << "[DEBUG] imap is full, writing to buffer" << std::endl;
                     }
-
+		    char* ssString = curSegmentSummary.toString();
+		    memcpy(&logBuffer[0],
+			   ssString,
+			   8*BLK_SIZE);
+		    delete ssString;
                     std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment+1);
 
                     if (DEBUG) std::cerr << "Segment file: " << segmentFile << std::endl;

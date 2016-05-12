@@ -21,6 +21,7 @@ class IMap
         IMap(int mapPiece);
         ~IMap();
         int addinode(int blockNumber);
+        int setinode(int blockNumber, int oldNum);
         void removeinode(int inode);
         int getBlockNumber(int inodeNumber) { return blockNumbers[inodeNumber]; }
         int getMapPieceNumber() { return mapPieceNumber; }

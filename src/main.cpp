@@ -856,6 +856,9 @@ void overwrite_file(std::string& filename, int numBytes, int startLoc, std::stri
     delete[] overwriteBuffer;
 }
 
+/**
+ * Remove a file from the LFS.
+ */
 void remove_file(std::string lfs_name){
   auto diskFileMap = filemap.getFilemap();
   std::unordered_map<std::string, int>::const_iterator fileIt = diskFileMap.find(lfs_name);
@@ -1027,6 +1030,13 @@ void remove_file(std::string lfs_name){
   f.close();
 }
 
+/**
+ * Clean numSegments segments.
+ */
+void clean_lfs(int numSegments)
+{
+
+}
 
 int main(int argc, char *argv[])
 {
@@ -1218,6 +1228,10 @@ int main(int argc, char *argv[])
         else if (tokens[0] == "clear" && tokens.size() == 1)
         {
             for (int i = 0; i < 50; i++) std::cout << std::endl;
+        }
+        else if (tokens[0] == "clean" && tokens.size() == 2)
+        {
+            clean_lfs(std::stoi(tokens[1]));
         }
         else
         {

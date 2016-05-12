@@ -441,11 +441,11 @@ void import_file(std::string& originalName, std::string& lfsName)
             {
                 logBuffer[logBufferPos + offset] = buffer[bufferPos + offset];
 	    }
-	    curSegmentSummary.UpdateBlockInfo(logBufferPos/BLK_SIZE, currentIMap.getNextINodeNumber()); 
+	    curSegmentSummary.UpdateBlockInfo(logBufferPos/BLK_SIZE, currentIMap.getNextINodeNumber());
             logBufferPos += BLK_SIZE;
-						  
+
 	}
-	
+
         else
         {
             if(!bufferFull)
@@ -597,7 +597,7 @@ void overwrite_file(std::string& filename, int numBytes, int startLoc, std::stri
     }
     char c = character.at(0);
     if (DEBUG) std::cerr << "Overwriting with '" << c << "'" << std::endl;
-    
+
     if (numBytes < 0)
     {
         std::cout << "[ERROR] Invalid number of bytes" << std::endl;
@@ -860,25 +860,25 @@ void overwrite_file(std::string& filename, int numBytes, int startLoc, std::stri
 void remove_file(std::string lfs_name){
   auto diskFileMap = filemap.getFilemap();
   std::unordered_map<std::string, int>::const_iterator fileIt = diskFileMap.find(lfs_name);
-  
+
   if(fileIt == diskFileMap.end()){
     std::cerr << "[ERROR] File '" << lfs_name << "' not found." << std::endl;
     return;
   }
   // Inode number for lfs_name
   int inodeNum = fileIt->second;
-  
+
   // Remove lfs_name from filemap
   filemap.removeFile(lfs_name);
 
   for(auto iter = filelist.begin(); iter != filelist.end(); ++iter) {
-    if((*iter).first == lfs_name) 
+    if((*iter).first == lfs_name)
       {
 	filelist.erase(iter);
 	break;
       }
   }
-  
+
   int blockNum = -1;
   for (int i = 0; i < IMAP_PIECE_COUNT; i++)
     {
@@ -899,16 +899,16 @@ void remove_file(std::string lfs_name){
     }
   // Calculate inode location (i.e. segment)
   int idx = ((int)(blockNum / BLK_SIZE)) + 1;
-  
+
   // Important variables
-  int* dataPointers; //Array of data block pointers 
+  int* dataPointers; //Array of data block pointers
   int remainingSeek = -1; //Remaining blocks to seek
   std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(idx);
   std::ifstream in;
   std::fstream f;
   char inodeBuffer[BLK_SIZE];
   bool inodeInBuffer = false, segmentFileOpen = false;
-  
+
   int relevantSegments[32];
   for(int i = 0; i < 32; i++){
     relevantSegments[i] = -1;
@@ -936,24 +936,24 @@ void remove_file(std::string lfs_name){
 	  std::cerr << "[ERROR] Could not open segment file for reading" << std::endl;
 	  return;
         }
-      
+
       segmentFileOpen = true;
       // Seek to inode information in segment file
       //in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32 + sizeof(int));
       //int remainingSeek = (BLK_SIZE - 32 - sizeof(int)) / sizeof(int);
       in.seekg(((blockNum % BLK_SIZE) * BLK_SIZE) + 32);
-      
+
       // Read filesize
       in.read((char*)&remainingSeek, sizeof(remainingSeek));
       //if(DEBUG) std::cerr << "[DEBUG](main-cat) Filesize: " <<  remainingSeek << std::endl;
-      
+
     }
-  
+
   //int filesize = remainingSeek; //Filesize in bytes
   remainingSeek = (remainingSeek % BLK_SIZE == 0) ? remainingSeek / BLK_SIZE : remainingSeek / BLK_SIZE + 1;
-  
+
   //if(DEBUG) std::cerr << "[DEBUG](main-cat) Filesize in blocks: " << remainingSeek << std::endl;
-  
+
   if(remainingSeek > 0)
       {
 	dataPointers = new int[remainingSeek];
@@ -963,13 +963,13 @@ void remove_file(std::string lfs_name){
       std::cout << "[ERROR] Invalid filesize" << std::endl;
       return;
     }
-  
+
   if(!dataPointers)
     {
       std::cout << "[ERROR] Problem allocating memory in cat_file()" << std::endl;
       return;
     }
-  
+
   for (int i = 0; i < remainingSeek; i++)
     {
       dataPointers[i] = -1;
@@ -977,7 +977,7 @@ void remove_file(std::string lfs_name){
       else memcpy((char*)&dataPointers[i], &inodeBuffer[32 + (i+1) * sizeof(int)], sizeof(int));
     }
   in.close();
-  
+
   int needsToChange = 1;
   for(int i = 0; i < remainingSeek; i++){
     for(int j = 0; j < numRelevantSegments; j++){
@@ -990,9 +990,9 @@ void remove_file(std::string lfs_name){
       relevantSegments[numRelevantSegments] = (dataPointers[i]/BLK_SIZE);
       numRelevantSegments++;
     }
-    
+
   }
-  
+
   for(int i = 0; i < numRelevantSegments; i++){
     if(relevantSegments[i] == currentSegment){
       for(int j = 0; j < 1016; j++){
@@ -1048,261 +1048,301 @@ void clean_lfs(int numSegments)
     std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(i);
     f.open(segmentFile,std::fstream::in | std::fstream::out | std::fstream::binary);
     for(int j = 0; j < 1016;j++){
-      int blockType, blockNumber;
-      f.read((char*)&blockType, sizeof(int));
-      f.read((char*)&blockNumber, sizeof(int));
-      if(blockType == -1){
-	// block is an inode
-	for(int k = 0; k < IMAP_PIECE_COUNT; k++){
-		
-	  if(listIMap[k].getBlockNumber() 
-	newSummary.sumBlock.dataBlockInfo[j].inode = blockType;
-	newSummary.sumBlock.dataBlockInfo[j].block = blockNumber;
-	
-	// move blocks into buffer
-      }
-      else if(blockType == -2){
-	// block is an imap
-	if((chkptregion.setIMapLocation(blockNumber,(bufPos/1024) + (1024*i))){
-	    
-	    newSummary.sumBlock.dataBlockInfo[j].inode = blockType;
-	    newSummary.sumBlock.dataBlockInfo[j].block = (bufPos/1024);
-	    
-	  }
-	  
-	// move blocks into buffer
-      }
 
-      else if(blockType >= 0){
-	//block is a data block
+        int blockType, blockNumber;
+        f.read((char*)&blockType, sizeof(int));
+        f.read((char*)&blockNumber, sizeof(int));
 
-	newSummary.sumBlock.dataBlockInfo[j].inode = blockType;
-	newSummary.sumBlock.dataBlockInfo[j].block = blockNumber;
-	
-	// move blocks into buffer
-      }
+        if(blockType == -1){
+
+            // block is an inode
+            for(int k = 0; k < IMAP_PIECE_COUNT; k++){
+
+                if(blockType == -1) {
+                    // Find filename
+                    char filename[32];
+                    int currSeekPos = f.tellg();
+                    f.seekg(blockNumber);
+                    f.read(filename, 32);
+                    f.seekg(blockNumber);
+
+                    auto fileIt = filemap.getFilemap().find(filename);
+                    if(fileIt == filemap.getFilemap().end()){
+                        continue;
+                    }
+
+                    // Get inodeNumber if valid filename
+                    int inodeNum = fileIt->second;
+                    int retBlockNum = -1;
+
+                    for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+                    {
+                        retBlockNum = listIMap[i].getBlockNumber(inodeNum);
+                        if (retBlockNum != -1)
+                        {
+                            break;
+                        }
+                    }
+                    // Find inode entry in imap piece buffer
+                    if(retBlockNum == -1)
+                    {
+                        retBlockNum = currentIMap.getBlockNumber(inodeNum);
+                    }
+
+                    if(retBlockNum == blockNumber) {
+                        newSummary.sumBlock.dataBlockInfo[j].inode = blockType;
+                        newSummary.sumBlock.dataBlockInfo[j].block = (bufPos/1024);
+                        f.read(&cleanBuffer[bufPos], BLK_SIZE);
+                        /* Must change inodeNum in appropriate imap */
+                        bufPos += BLK_SIZE;
+                        f.seekg(currSeekPos);
+                    }
+                    // move blocks into buffer
+                }
+                else if(blockType == -2){
+
+                    // block is an imap
+                    if(chkptregion.setIMapLocation(blockNumber,(bufPos/1024) + (1024*i))){
+                        newSummary.sumBlock.dataBlockInfo[j].inode = blockType;
+                        newSummary.sumBlock.dataBlockInfo[j].block = (bufPos/1024);
+                    }
+                    // move blocks into buffer
+                }
+
+                else if(blockType >= 0){
+                    //block is a data block
+                    newSummary.sumBlock.dataBlockInfo[j].inode = blockType;
+                    newSummary.sumBlock.dataBlockInfo[j].block = (bufPos/1024);
+                    int currSeekPos = f.tellg();
+                    f.seekg(blockNumber);
+                    f.read(&cleanBuffer[bufPos], BLK_SIZE);
+                    f.seekg(currSeekPos);
+                    // move blocks into buffer
+                }
+
+            }
+            // kill the segment
+            chkptregion.markSegment(i,false);
+        }
+
 
     }
-    // kill the segment
-    chkptregion.markSegment(i,false);
   }
-  
-	
 }
 
-int main(int argc, char *argv[])
-{
-  currentSegment = chkptregion.getNextFreeSeg();
-    if (DEBUG) std::cerr << "Current segment file: ./DRIVE/SEGMENT" << currentSegment + 1<< std::endl;
+  int main(int argc, char *argv[])
+  {
+      currentSegment = chkptregion.getNextFreeSeg();
+      if (DEBUG) std::cerr << "Current segment file: ./DRIVE/SEGMENT" << currentSegment + 1<< std::endl;
 
-    // Grab contents of current segment
-    std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment + 1);
+      // Grab contents of current segment
+      std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment + 1);
 
-    // Open segment for reading
-    std::ifstream ifs(segmentFile, std::ifstream::binary);
-    if(!ifs.is_open())
-    {
-        std::cerr << "[ERROR] Could not open '" << segmentFile << "' file for reading" << std::endl;
-        exit(1);
-    }
-    ifs.read(logBuffer, SEGMENT_SIZE);
-    ifs.close();
+      // Open segment for reading
+      std::ifstream ifs(segmentFile, std::ifstream::binary);
+      if(!ifs.is_open())
+      {
+          std::cerr << "[ERROR] Could not open '" << segmentFile << "' file for reading" << std::endl;
+          exit(1);
+      }
+      ifs.read(logBuffer, SEGMENT_SIZE);
+      ifs.close();
 
-    // Initialize buffers' positions
-    logBufferPos = 8 * BLK_SIZE; // Start buffer after segment summary blocks
-    overBufPos = 0;
+      // Initialize buffers' positions
+      logBufferPos = 8 * BLK_SIZE; // Start buffer after segment summary blocks
+      overBufPos = 0;
 
-    // Set up imap array and last used imap piece
-    auto imapPieceLocs = chkptregion.getimapArray();
-    for (int i = 0; i < IMAP_PIECE_COUNT; i++)
-    {
-        listIMap[i] = IMap(-1);
-        if (DEBUG && imapPieceLocs[i] != 0) std::cerr << "Setting up imap at location: " << imapPieceLocs[i] << std::endl;
-        listIMap[i].setUpImap(std::make_pair(imapPieceLocs[i], i), false);
-    }
-    currentIMap.setUpImap(chkptregion.getLastImapPieceLoc(), true);
+      // Set up imap array and last used imap piece
+      auto imapPieceLocs = chkptregion.getimapArray();
+      for (int i = 0; i < IMAP_PIECE_COUNT; i++)
+      {
+          listIMap[i] = IMap(-1);
+          if (DEBUG && imapPieceLocs[i] != 0) std::cerr << "Setting up imap at location: " << imapPieceLocs[i] << std::endl;
+          listIMap[i].setUpImap(std::make_pair(imapPieceLocs[i], i), false);
+      }
+      currentIMap.setUpImap(chkptregion.getLastImapPieceLoc(), true);
 
-    // Exit with an error message if argument count is incorrect (i.e. expecting one: input file path)
-    if (argc != 1)
-    {
-        std::cerr << argv[0] << ": program does not take arguments; commands are sent as input, not arguments" << std::endl;
-        exit(1);
-    }
+      // Exit with an error message if argument count is incorrect (i.e. expecting one: input file path)
+      if (argc != 1)
+      {
+          std::cerr << argv[0] << ": program does not take arguments; commands are sent as input, not arguments" << std::endl;
+          exit(1);
+      }
 
-    /**
-     * Process command from user input.
-     */
-    std::string command;
-    if (DEBUG) std::cerr << "[DEBUG] Now accepting commands" << std::endl;
-    while (std::getline(std::cin, command))
-    {
-        if (command.empty() || std::all_of(command.begin(), command.end(), isspace))
-        {
-            std::cout << "[ERROR] Command not recognized; please try again..." << std::endl;
-            continue;
-        }
+      /**
+       * Process command from user input.
+       */
+      std::string command;
+      if (DEBUG) std::cerr << "[DEBUG] Now accepting commands" << std::endl;
+      while (std::getline(std::cin, command))
+      {
+          if (command.empty() || std::all_of(command.begin(), command.end(), isspace))
+          {
+              std::cout << "[ERROR] Command not recognized; please try again..." << std::endl;
+              continue;
+          }
 
-        std::string buffer;
-        std::stringstream ss(command);
-        std::vector<std::string> tokens;
-        while (ss >> buffer) tokens.push_back(buffer);
+          std::string buffer;
+          std::stringstream ss(command);
+          std::vector<std::string> tokens;
+          while (ss >> buffer) tokens.push_back(buffer);
 
-        if (tokens[0] == "exit" && tokens.size() == 1)
-        {
-            if (completedOperations)
-            {
-                proper_exit();
-            }
-            else
-            {
-                exit(0);
-            }
-        }
-        else if ((tokens[0] == "list" || tokens[0] == "ls" || tokens[0] == "sl") && tokens.size() == 1)
-        {
-            if (tokens[0] == "sl")
-            {
-                std::cout << "[WARNING] Did you mean 'list' or 'ls'? No worries, trains don't come around this filesystem." << std::endl;
-            }
-            list_files();
-        }
-        else if (tokens[0] == "cat" && tokens.size() == 2)
-        {
-            cat_file(tokens[1], -1, -1);
-        }
-        else if (tokens[0] == "display" && tokens.size() == 4)
-        {
-            cat_file(tokens[1], std::stoi(tokens[2]), std::stoi(tokens[3]));
-        }
-        else if (tokens[0] == "overwrite" && tokens.size() == 5)
-        {
-            completedOperations = true;
-            overwrite_file(tokens[1], std::stoi(tokens[2]), std::stoi(tokens[3]), tokens[4]);
-        }
-        else if (tokens[0] == "import" && tokens.size() == 3)
-        {
-            completedOperations = true;
-            std::string name = tokens[2];
-            auto it = std::find_if(filelist.begin(), filelist.end(), [&name](const std::pair<std::string, int>& pair)
-            {
-                return pair.first == name;
-            });
-            if (it != filelist.end())
-            {
-                std::cerr << "[ERROR] Cannot import with duplicate filename < " << tokens[2] << " >" << std::endl;
-            }
-            else
-            {
-                import_file(tokens[1], tokens[2]);
-                if(bufferFull)
-                {
-                    if(currentIMap.isFull())
-                    {
-                        char* imapStr = currentIMap.convertToString();
-                        memcpy(&overflowBuffer[overBufPos],
-                                imapStr,
-                                sizeof(int) * 256);
-                        delete imapStr;
-                        currentIMap.clear();
-                        chkptregion.addimap((BLK_SIZE * (currentSegment+1)) +
-                                overBufPos/BLK_SIZE + 8);
-                        if(DEBUG) std::cerr << "[DEBUG] imap is full, writing to buffer" << std::endl;
-                    }
-		    char* ssString = curSegmentSummary.toString();
-		    memcpy(&logBuffer[0],
-			   ssString,
-			   8*BLK_SIZE);
-		    delete ssString;
-                    std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment+1);
+          if (tokens[0] == "exit" && tokens.size() == 1)
+          {
+              if (completedOperations)
+              {
+                  proper_exit();
+              }
+              else
+              {
+                  exit(0);
+              }
+          }
+          else if ((tokens[0] == "list" || tokens[0] == "ls" || tokens[0] == "sl") && tokens.size() == 1)
+          {
+              if (tokens[0] == "sl")
+              {
+                  std::cout << "[WARNING] Did you mean 'list' or 'ls'? No worries, trains don't come around this filesystem." << std::endl;
+              }
+              list_files();
+          }
+          else if (tokens[0] == "cat" && tokens.size() == 2)
+          {
+              cat_file(tokens[1], -1, -1);
+          }
+          else if (tokens[0] == "display" && tokens.size() == 4)
+          {
+              cat_file(tokens[1], std::stoi(tokens[2]), std::stoi(tokens[3]));
+          }
+          else if (tokens[0] == "overwrite" && tokens.size() == 5)
+          {
+              completedOperations = true;
+              overwrite_file(tokens[1], std::stoi(tokens[2]), std::stoi(tokens[3]), tokens[4]);
+          }
+          else if (tokens[0] == "import" && tokens.size() == 3)
+          {
+              completedOperations = true;
+              std::string name = tokens[2];
+              auto it = std::find_if(filelist.begin(), filelist.end(), [&name](const std::pair<std::string, int>& pair)
+                      {
+                      return pair.first == name;
+                      });
+              if (it != filelist.end())
+              {
+                  std::cerr << "[ERROR] Cannot import with duplicate filename < " << tokens[2] << " >" << std::endl;
+              }
+              else
+              {
+                  import_file(tokens[1], tokens[2]);
+                  if(bufferFull)
+                  {
+                      if(currentIMap.isFull())
+                      {
+                          char* imapStr = currentIMap.convertToString();
+                          memcpy(&overflowBuffer[overBufPos],
+                                  imapStr,
+                                  sizeof(int) * 256);
+                          delete imapStr;
+                          currentIMap.clear();
+                          chkptregion.addimap((BLK_SIZE * (currentSegment+1)) +
+                                  overBufPos/BLK_SIZE + 8);
+                          if(DEBUG) std::cerr << "[DEBUG] imap is full, writing to buffer" << std::endl;
+                      }
+                      char* ssString = curSegmentSummary.toString();
+                      memcpy(&logBuffer[0],
+                              ssString,
+                              8*BLK_SIZE);
+                      delete ssString;
+                      std::string segmentFile = "./DRIVE/SEGMENT" + std::to_string(currentSegment+1);
 
-                    if (DEBUG) std::cerr << "Segment file: " << segmentFile << std::endl;
-                    std::ofstream ofs(segmentFile);
-                    if(!ofs.is_open())
-                    {
-                        std::cerr << "[ERROR] Could not open SEGMENT file for reading" << std::endl;
-                        exit(1);
-                    }
-                    ofs.write(logBuffer, SEGMENT_SIZE);
-                    ofs.close();
+                      if (DEBUG) std::cerr << "Segment file: " << segmentFile << std::endl;
+                      std::ofstream ofs(segmentFile);
+                      if(!ofs.is_open())
+                      {
+                          std::cerr << "[ERROR] Could not open SEGMENT file for reading" << std::endl;
+                          exit(1);
+                      }
+                      ofs.write(logBuffer, SEGMENT_SIZE);
+                      ofs.close();
 
-                    if(DEBUG)
-                    {
-                        std::cerr << "[DEBUG] Buffer is full, writing to segment" << std::endl;
-                        std::cerr << "[DEBUG] overBufPos: " << overBufPos/BLK_SIZE << std::endl;
-                    }
+                      if(DEBUG)
+                      {
+                          std::cerr << "[DEBUG] Buffer is full, writing to segment" << std::endl;
+                          std::cerr << "[DEBUG] overBufPos: " << overBufPos/BLK_SIZE << std::endl;
+                      }
 
-                    //Put overflowBuffer in logBuffer
-                    if(overBufPos > 0)
-                    {
-                        memcpy(&logBuffer[8 * BLK_SIZE],
-                                overflowBuffer,
-                                overBufPos);
-                        logBufferPos = 8 * BLK_SIZE + overBufPos;
-                        overBufPos = 0;
-                        if(DEBUG) std::cerr << "[DEBUG] Overflow buffer successfully written" << std::endl;
-                    }
-                    else
-                    {
-                        logBufferPos = 0;
-                    }
+                      //Put overflowBuffer in logBuffer
+                      if(overBufPos > 0)
+                      {
+                          memcpy(&logBuffer[8 * BLK_SIZE],
+                                  overflowBuffer,
+                                  overBufPos);
+                          logBufferPos = 8 * BLK_SIZE + overBufPos;
+                          overBufPos = 0;
+                          if(DEBUG) std::cerr << "[DEBUG] Overflow buffer successfully written" << std::endl;
+                      }
+                      else
+                      {
+                          logBufferPos = 0;
+                      }
 
-                    // Update segment
-                    chkptregion.markSegment(currentSegment, true);
-                    currentSegment = chkptregion.getNextFreeSeg();
+                      // Update segment
+                      chkptregion.markSegment(currentSegment, true);
+                      currentSegment = chkptregion.getNextFreeSeg();
 
-                    // Reset
-                    bufferFull = false;
-                }
+                      // Reset
+                      bufferFull = false;
+                  }
 
-                if(currentIMap.isFull())
-                {
-                    // Copy imap piece into buffer
-                    char* imapStr = currentIMap.convertToString();
-                    memcpy(&logBuffer[logBufferPos],
-                            imapStr,
-                            sizeof(int) * 256);
+                  if(currentIMap.isFull())
+                  {
+                      // Copy imap piece into buffer
+                      char* imapStr = currentIMap.convertToString();
+                      memcpy(&logBuffer[logBufferPos],
+                              imapStr,
+                              sizeof(int) * 256);
 
-                    // Ready imap object for next imap
-                    currentIMap.clear();
-                    chkptregion.addimap((BLK_SIZE * currentSegment) + logBufferPos/BLK_SIZE);
-                    delete imapStr;
+                      // Ready imap object for next imap
+                      currentIMap.clear();
+                      chkptregion.addimap((BLK_SIZE * currentSegment) + logBufferPos/BLK_SIZE);
+                      delete imapStr;
 
-                    if(DEBUG) std::cerr << "[DEBUG] imap is full, writing to buffer" << std::endl;
-                }
+                      if(DEBUG) std::cerr << "[DEBUG] imap is full, writing to buffer" << std::endl;
+                  }
 
-            }
-        }
-        else if ((tokens[0] == "remove" || tokens[0] == "rm") && tokens.size() == 2)
-        {
-            completedOperations = true;
-            remove_file(tokens[1]);
-        }
-        else if (tokens[0] == "clear" && tokens.size() == 1)
-        {
-            for (int i = 0; i < 50; i++) std::cout << std::endl;
-        }
-        else if (tokens[0] == "clean" && tokens.size() == 2)
-        {
-            clean_lfs(std::stoi(tokens[1]));
-        }
-        else
-        {
-            std::cout << "[ERROR] Command not recognized; please try again..." << std::endl;
-        }
-    }
+              }
+          }
+          else if ((tokens[0] == "remove" || tokens[0] == "rm") && tokens.size() == 2)
+          {
+              completedOperations = true;
+              remove_file(tokens[1]);
+          }
+          else if (tokens[0] == "clear" && tokens.size() == 1)
+          {
+              for (int i = 0; i < 50; i++) std::cout << std::endl;
+          }
+          else if (tokens[0] == "clean" && tokens.size() == 2)
+          {
+              clean_lfs(std::stoi(tokens[1]));
+          }
+          else
+          {
+              std::cout << "[ERROR] Command not recognized; please try again..." << std::endl;
+          }
+      }
 
-    /**
-     * Exit in case of CTRL+D or EOF.
-     */
+      /**
+       * Exit in case of CTRL+D or EOF.
+       */
 
-    if (completedOperations)
-    {
-        proper_exit();
-    }
-    else
-    {
-        exit(0);
-    }
+      if (completedOperations)
+      {
+          proper_exit();
+      }
+      else
+      {
+          exit(0);
+      }
 
-    return 0;
-}
+      return 0;
+  }
